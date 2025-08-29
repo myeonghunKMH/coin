@@ -28,9 +28,18 @@
         </div>
         <canvas id="coinChart"></canvas>
       </div>
+
+      <div class="orderbook-section">
+        <h2>호가창 (Orderbook)</h2>
+        <div class="orderbook-container">
+          <div class="orderbook-list" id="ask-list"></div>
+          <div class="orderbook-list" id="bid-list"></div>
+        </div>
+      </div>
     </div>
 
     <script>
+      // ... (기존 스크립트 코드는 그대로 유지)
       const marketCodes = ["KRW-BTC", "KRW-ETH", "KRW-XRP"];
       const coinNames = {
         "KRW-BTC": "비트코인",
@@ -39,9 +48,10 @@
       };
 
       let latestTickerData = {};
+      let latestOrderbookData = {};
       let activeCoin = "KRW-BTC";
       let activeUnit = "60";
-      let lastUpdateTime = null; // 마지막 업데이트 시간을 추적하는 변수
+      let lastUpdateTime = null;
 
       marketCodes.forEach((code) => {
         latestTickerData[code] = {
@@ -50,6 +60,7 @@
           signed_change_price: 0,
           acc_trade_price_24h: 0,
         };
+        latestOrderbookData[code] = {};
       });
 
       const ctx = document.getElementById("coinChart").getContext("2d");
@@ -57,13 +68,11 @@
 
       async function fetchAndRenderChart() {
         if (!activeCoin || !activeUnit) return;
-
         try {
           const response = await fetch(
             `/api/candles?unit=${activeUnit}&market=${activeCoin}`
           );
           const data = await response.json();
-
           const sortedData = data.reverse();
           const chartData = sortedData.map((d) => ({
             x: new Date(d.candle_date_time_kst).getTime(),
@@ -112,7 +121,7 @@
                     day: "MM-DD",
                   },
                 },
-                title: { display: true, text: "시간", color: "white" },
+                //title: { display: true, text: "시간", color: "white" },
                 grid: { color: "rgba(255, 255, 255, 0.1)" },
                 ticks: { color: "white" },
               },
@@ -140,12 +149,8 @@
         }
       }
 
-      // 수정된 updateUI 함수 (index.html)
       function updateUI(code) {
-        // 1. 코인 탭 업데이트
         const tabsContainer = document.getElementById("coin-tabs");
-
-        // 코인 탭이 처음 생성될 때만 버튼을 만듭니다.
         if (tabsContainer.children.length === 0) {
           marketCodes.forEach((c) => {
             const tab = document.createElement("div");
@@ -155,8 +160,6 @@
             tabsContainer.appendChild(tab);
           });
         }
-
-        // 활성화 클래스만 변경하는 로직
         document.querySelectorAll(".coin-tab").forEach((tab) => {
           if (tab.innerText === coinNames[code]) {
             tab.classList.add("active");
@@ -165,7 +168,6 @@
           }
         });
 
-        // 2. 가격 요약 카드 업데이트 (기존과 동일)
         const summaryContainer = document.getElementById("coin-summary");
         const data = latestTickerData[code];
         if (data) {
@@ -195,14 +197,54 @@
                 data.acc_trade_price_24h
               ).toLocaleString()} KRW</span>
             </div>
-        `;
+          `;
         }
+      }
+
+      function updateOrderbookUI(orderbook) {
+        if (!orderbook || !orderbook.orderbook_units) return;
+        const askList = document.getElementById("ask-list");
+        const bidList = document.getElementById("bid-list");
+
+        // 매수/매도 리스트 초기화
+        askList.innerHTML = "";
+        bidList.innerHTML = "";
+
+        const asks = orderbook.orderbook_units.sort(
+          (a, b) => b.ask_price - a.ask_price
+        );
+        const bids = orderbook.orderbook_units.sort(
+          (a, b) => b.bid_price - a.bid_price
+        );
+
+        // 상위 10개의 매도 호가만 렌더링
+        asks.slice(0, 10).forEach((unit) => {
+          const div = document.createElement("div");
+          div.className = "orderbook-unit ask";
+          div.innerHTML = `
+            <span class="orderbook-price ask">${unit.ask_price.toLocaleString()}</span>
+            <span class="orderbook-size">${unit.ask_size.toFixed(4)}</span>
+          `;
+          askList.appendChild(div);
+        });
+
+        // 상위 10개의 매수 호가만 렌더링
+        bids.slice(0, 10).forEach((unit) => {
+          const div = document.createElement("div");
+          div.className = "orderbook-unit bid";
+          div.innerHTML = `
+            <span class="orderbook-price bid">${unit.bid_price.toLocaleString()}</span>
+            <span class="orderbook-size">${unit.bid_size.toFixed(4)}</span>
+          `;
+          bidList.appendChild(div);
+        });
       }
 
       function switchCoin(code) {
         if (activeCoin !== code) {
           activeCoin = code;
           updateUI(activeCoin);
+          updateOrderbookUI(latestOrderbookData[activeCoin]);
           fetchAndRenderChart();
         }
       }
@@ -235,36 +277,37 @@
       function handleWebSocketMessage(data) {
         try {
           const upbitData = JSON.parse(data);
-          if (
-            upbitData &&
-            upbitData.code &&
-            marketCodes.includes(upbitData.code) &&
-            upbitData.trade_price
-          ) {
+
+          if (upbitData.type === "ticker") {
             const code = upbitData.code;
-            latestTickerData[code] = {
-              trade_price: upbitData.trade_price,
-              change_rate: upbitData.change_rate || 0,
-              signed_change_price: upbitData.signed_change_price || 0,
-              acc_trade_price_24h: upbitData.acc_trade_price_24h || 0,
-              trade_timestamp: upbitData.trade_timestamp,
-            };
-            updateUI(activeCoin);
+            if (marketCodes.includes(code)) {
+              latestTickerData[code] = {
+                trade_price: upbitData.trade_price,
+                change_rate: upbitData.change_rate || 0,
+                signed_change_price: upbitData.signed_change_price || 0,
+                acc_trade_price_24h: upbitData.acc_trade_price_24h || 0,
+                trade_timestamp: upbitData.trade_timestamp,
+              };
+              if (code === activeCoin) updateUI(activeCoin);
+            }
+          } else if (upbitData.type === "orderbook") {
+            const code = upbitData.code;
+            if (marketCodes.includes(code)) {
+              latestOrderbookData[code] = upbitData;
+              if (code === activeCoin) updateOrderbookUI(upbitData);
+            }
           }
         } catch (e) {
           console.error("웹소켓 메시지 파싱 오류:", e);
         }
       }
 
-      // ** 새로운 자동 업데이트 로직 추가 **
       function checkAndAutoUpdateChart() {
         const now = new Date();
         const currentMinute = now.getMinutes();
         const currentHour = now.getHours();
-
         let unitInMinutes = parseInt(activeUnit);
 
-        // 1일(1D)인 경우, 자정(0시 0분)에 업데이트
         if (activeUnit === "1D") {
           if (
             currentHour === 0 &&
@@ -276,12 +319,9 @@
           } else if (currentHour !== 0 || currentMinute !== 0) {
             lastUpdateTime = null;
           }
-        }
-        // 분 단위인 경우, 해당 분이 00초일 때 업데이트
-        else if (unitInMinutes) {
+        } else if (unitInMinutes) {
           const isUpdateMinute = currentMinute % unitInMinutes === 0;
           const lastUpdateString = `${activeUnit}-${currentHour}:${currentMinute}`;
-
           if (
             isUpdateMinute &&
             now.getSeconds() === 0 &&
@@ -295,11 +335,8 @@
         }
       }
 
-      // 페이지 로드 시 초기 차트 및 UI 렌더링
       updateUI(activeCoin);
       fetchAndRenderChart();
-
-      // 5초마다 자동 업데이트 확인
       setInterval(checkAndAutoUpdateChart, 5000);
     </script>
   </body>

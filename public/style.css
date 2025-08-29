@@ -89,14 +89,89 @@ h1 {
 }
 
 .positive {
-  color: #00b06b;
+  color: #ef4c4c;
 }
 
 .negative {
-  color: #ef4c4c;
+  color: #4c54ef;
 }
 
 .chart-section {
   width: 100%;
   height: 500px;
+}
+
+.orderbook-section {
+  width: 100%;
+  margin-top: 100px;
+}
+
+.orderbook-section h2 {
+  color: white;
+  text-align: center;
+  margin-bottom: 15px;
+}
+
+.orderbook-container {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: white;
+}
+
+.orderbook-list {
+  flex: 1;
+  background-color: #222;
+  padding: 10px;
+  border-radius: 8px;
+  max-height: 150px; /* 호가창의 최대 높이를 설정하여 길이를 줄임 */
+  overflow-y: auto; /* 스크롤바 추가 */
+}
+
+/* 스크롤바 스타일링 (선택 사항) */
+.orderbook-list::-webkit-scrollbar {
+  width: 8px;
+}
+.orderbook-list::-webkit-scrollbar-thumb {
+  background-color: #555;
+  border-radius: 4px;
+}
+
+.orderbook-list h3 {
+  text-align: center;
+  margin-bottom: 5px; /* 제목 아래 여백 줄임 */
+}
+
+.orderbook-unit {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px; /* 패딩을 줄여서 더 많은 항목 표시 */
+  font-size: 13px; /* 글자 크기 줄임 */
+  border-radius: 2px; /* 모서리 둥글기 줄임 */
+  margin-bottom: 1px; /* 항목 사이의 간격 줄임 */
+}
+
+.orderbook-unit.bid {
+  background-color: rgba(255, 152, 152, 0.1);
+}
+
+.orderbook-unit.ask {
+  background-color: rgba(145, 146, 255, 0.1);
+}
+
+.orderbook-price {
+  font-weight: bold;
+}
+
+.orderbook-price.bid {
+  color: #f44336;
+}
+
+.orderbook-price.ask {
+  color: #2532ee;
+}
+
+.orderbook-size {
+  font-size: 12px; /* 거래량 글자 크기 더 작게 */
+  color: #ccc;
 }

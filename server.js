@@ -5,20 +5,14 @@ const http = require("http");
 const { v4: uuidv4 } = require("uuid");
 const WebSocket = require("ws");
 const axios = require("axios"); // axios 라이브러리
+const cors = require("cors");
 
 const app = express();
 const server = http.createServer(app);
 const wss = new Server({ server });
 
 // CORS 허용 (로컬 환경 테스트용)
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept"
-  );
-  next();
-});
+app.use(cors());
 
 // 프론트엔드 파일을 제공할 정적 폴더 설정
 app.use(express.static("public"));
@@ -60,7 +54,9 @@ upbitWs.onopen = () => {
   console.log("업비트 웹소켓 서버에 연결되었습니다.");
   const requestMessage = [
     { ticket: uuidv4() },
+    // 티커와 호가창 데이터를 모두 구독하도록 추가
     { type: "ticker", codes: marketCodes },
+    { type: "orderbook", codes: marketCodes },
     { format: "DEFAULT" },
   ];
   upbitWs.send(JSON.stringify(requestMessage));
