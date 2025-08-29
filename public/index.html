@@ -41,6 +41,7 @@
       let latestTickerData = {};
       let activeCoin = "KRW-BTC";
       let activeUnit = "60";
+      let lastUpdateTime = null; // 마지막 업데이트 시간을 추적하는 변수
 
       marketCodes.forEach((code) => {
         latestTickerData[code] = {
@@ -123,11 +124,9 @@
             },
           };
 
-          // --- 수정된 부분: 차트 인스턴스 존재 여부 확인 및 파괴 ---
           if (mainChart) {
-            mainChart.destroy(); // 기존 차트 파괴
+            mainChart.destroy();
           }
-          // ----------------------------------------------------
 
           mainChart = new Chart(ctx, {
             type: "candlestick",
@@ -141,17 +140,32 @@
         }
       }
 
+      // 수정된 updateUI 함수 (index.html)
       function updateUI(code) {
+        // 1. 코인 탭 업데이트
         const tabsContainer = document.getElementById("coin-tabs");
-        tabsContainer.innerHTML = "";
-        marketCodes.forEach((c) => {
-          const tab = document.createElement("div");
-          tab.className = `coin-tab ${c === activeCoin ? "active" : ""}`;
-          tab.innerText = coinNames[c];
-          tab.onclick = () => switchCoin(c);
-          tabsContainer.appendChild(tab);
+
+        // 코인 탭이 처음 생성될 때만 버튼을 만듭니다.
+        if (tabsContainer.children.length === 0) {
+          marketCodes.forEach((c) => {
+            const tab = document.createElement("div");
+            tab.className = `coin-tab ${c === activeCoin ? "active" : ""}`;
+            tab.innerText = coinNames[c];
+            tab.onclick = () => switchCoin(c);
+            tabsContainer.appendChild(tab);
+          });
+        }
+
+        // 활성화 클래스만 변경하는 로직
+        document.querySelectorAll(".coin-tab").forEach((tab) => {
+          if (tab.innerText === coinNames[code]) {
+            tab.classList.add("active");
+          } else {
+            tab.classList.remove("active");
+          }
         });
 
+        // 2. 가격 요약 카드 업데이트 (기존과 동일)
         const summaryContainer = document.getElementById("coin-summary");
         const data = latestTickerData[code];
         if (data) {
@@ -181,7 +195,7 @@
                 data.acc_trade_price_24h
               ).toLocaleString()} KRW</span>
             </div>
-          `;
+        `;
         }
       }
 
@@ -242,8 +256,51 @@
         }
       }
 
+      // ** 새로운 자동 업데이트 로직 추가 **
+      function checkAndAutoUpdateChart() {
+        const now = new Date();
+        const currentMinute = now.getMinutes();
+        const currentHour = now.getHours();
+
+        let unitInMinutes = parseInt(activeUnit);
+
+        // 1일(1D)인 경우, 자정(0시 0분)에 업데이트
+        if (activeUnit === "1D") {
+          if (
+            currentHour === 0 &&
+            currentMinute === 0 &&
+            lastUpdateTime !== "1D-updated"
+          ) {
+            fetchAndRenderChart();
+            lastUpdateTime = "1D-updated";
+          } else if (currentHour !== 0 || currentMinute !== 0) {
+            lastUpdateTime = null;
+          }
+        }
+        // 분 단위인 경우, 해당 분이 00초일 때 업데이트
+        else if (unitInMinutes) {
+          const isUpdateMinute = currentMinute % unitInMinutes === 0;
+          const lastUpdateString = `${activeUnit}-${currentHour}:${currentMinute}`;
+
+          if (
+            isUpdateMinute &&
+            now.getSeconds() === 0 &&
+            lastUpdateTime !== lastUpdateString
+          ) {
+            fetchAndRenderChart();
+            lastUpdateTime = lastUpdateString;
+          } else if (!isUpdateMinute) {
+            lastUpdateTime = null;
+          }
+        }
+      }
+
+      // 페이지 로드 시 초기 차트 및 UI 렌더링
       updateUI(activeCoin);
       fetchAndRenderChart();
+
+      // 5초마다 자동 업데이트 확인
+      setInterval(checkAndAutoUpdateChart, 5000);
     </script>
   </body>
 </html>

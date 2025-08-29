@@ -34,15 +34,22 @@ h1 {
 }
 
 .coin-tab {
+  /* 기존 스타일 */
   background-color: #333;
   color: white;
   padding: 10px 20px;
   border-radius: 5px;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: background-color 0.3s ease, transform 0.2s ease-in-out; /* transform 속성 추가 */
   font-weight: bold;
   flex-grow: 1;
   max-width: 200px;
+  transform: scale(1); /* 기본 상태를 1로 설정 */
+}
+
+.coin-tab:hover {
+  background-color: #4caf50;
+  transform: scale(1.05); /* 마우스 올리면 1.05배 확대 */
 }
 
 .coin-tab.active,
