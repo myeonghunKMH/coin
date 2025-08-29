@@ -175,3 +175,32 @@ h1 {
   font-size: 12px; /* 거래량 글자 크기 더 작게 */
   color: #ccc;
 }
+
+.orderbook-toggle {
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.toggle-button {
+  background-color: #333;
+  color: white;
+  border: 1px solid #555;
+  padding: 8px 15px;
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: 5px;
+  transition: background-color 0.3s;
+}
+
+.toggle-button:hover {
+  background-color: #555;
+}
+
+.toggle-button.active {
+  background-color: #007bff;
+  border-color: #007bff;
+}
+
+.orderbook-container.hidden {
+  display: none;
+}

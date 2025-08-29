@@ -54,9 +54,20 @@ upbitWs.onopen = () => {
   console.log("업비트 웹소켓 서버에 연결되었습니다.");
   const requestMessage = [
     { ticket: uuidv4() },
-    // 티커와 호가창 데이터를 모두 구독하도록 추가
     { type: "ticker", codes: marketCodes },
-    { type: "orderbook", codes: marketCodes },
+
+    // 모든 코인에 대한 일반 호가(level: 0) 구독
+    { type: "orderbook", codes: marketCodes, level: 0 },
+
+    // BTC에 대한 누적 호가 구독 (예시: 100만 원 단위)
+    { type: "orderbook", codes: ["KRW-BTC"], level: 1000000 },
+
+    // ETH에 대한 누적 호가 구독 (예시: 1만 원 단위)
+    { type: "orderbook", codes: ["KRW-ETH"], level: 10000 },
+
+    // XRP에 대한 누적 호가 구독 (예시: 1원 단위)
+    { type: "orderbook", codes: ["KRW-XRP"], level: 1 },
+
     { format: "DEFAULT" },
   ];
   upbitWs.send(JSON.stringify(requestMessage));

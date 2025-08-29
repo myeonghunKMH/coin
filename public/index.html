@@ -31,15 +31,27 @@
 
       <div class="orderbook-section">
         <h2>호가창 (Orderbook)</h2>
-        <div class="orderbook-container">
-          <div class="orderbook-list" id="ask-list"></div>
-          <div class="orderbook-list" id="bid-list"></div>
+        <div class="orderbook-toggle">
+          <button id="toggle-general" class="toggle-button active">
+            일반 호가
+          </button>
+          <button id="toggle-grouped" class="toggle-button">누적 호가</button>
+        </div>
+        <div class="orderbook-container" id="general-orderbook-container">
+          <div class="orderbook-list" id="general-ask-list"></div>
+          <div class="orderbook-list" id="general-bid-list"></div>
+        </div>
+        <div
+          class="orderbook-container hidden"
+          id="grouped-orderbook-container"
+        >
+          <div class="orderbook-list" id="grouped-ask-list"></div>
+          <div class="orderbook-list" id="grouped-bid-list"></div>
         </div>
       </div>
     </div>
 
     <script>
-      // ... (기존 스크립트 코드는 그대로 유지)
       const marketCodes = ["KRW-BTC", "KRW-ETH", "KRW-XRP"];
       const coinNames = {
         "KRW-BTC": "비트코인",
@@ -52,6 +64,7 @@
       let activeCoin = "KRW-BTC";
       let activeUnit = "60";
       let lastUpdateTime = null;
+      let activeOrderbookType = "general"; // 'general' 또는 'grouped'
 
       marketCodes.forEach((code) => {
         latestTickerData[code] = {
@@ -60,7 +73,10 @@
           signed_change_price: 0,
           acc_trade_price_24h: 0,
         };
-        latestOrderbookData[code] = {};
+        latestOrderbookData[code] = {
+          general: null,
+          grouped: null,
+        };
       });
 
       const ctx = document.getElementById("coinChart").getContext("2d");
@@ -121,7 +137,7 @@
                     day: "MM-DD",
                   },
                 },
-                //title: { display: true, text: "시간", color: "white" },
+                title: { display: true, text: "시간", color: "white" },
                 grid: { color: "rgba(255, 255, 255, 0.1)" },
                 ticks: { color: "white" },
               },
@@ -201,12 +217,11 @@
         }
       }
 
-      function updateOrderbookUI(orderbook) {
+      function updateOrderbookUI(orderbook, askListId, bidListId) {
         if (!orderbook || !orderbook.orderbook_units) return;
-        const askList = document.getElementById("ask-list");
-        const bidList = document.getElementById("bid-list");
+        const askList = document.getElementById(askListId);
+        const bidList = document.getElementById(bidListId);
 
-        // 매수/매도 리스트 초기화
         askList.innerHTML = "";
         bidList.innerHTML = "";
 
@@ -217,7 +232,7 @@
           (a, b) => b.bid_price - a.bid_price
         );
 
-        // 상위 10개의 매도 호가만 렌더링
+        // 상위 10개만 렌더링
         asks.slice(0, 10).forEach((unit) => {
           const div = document.createElement("div");
           div.className = "orderbook-unit ask";
@@ -228,7 +243,7 @@
           askList.appendChild(div);
         });
 
-        // 상위 10개의 매수 호가만 렌더링
+        // 상위 10개만 렌더링
         bids.slice(0, 10).forEach((unit) => {
           const div = document.createElement("div");
           div.className = "orderbook-unit bid";
@@ -244,10 +259,61 @@
         if (activeCoin !== code) {
           activeCoin = code;
           updateUI(activeCoin);
-          updateOrderbookUI(latestOrderbookData[activeCoin]);
+          if (activeOrderbookType === "general") {
+            updateOrderbookUI(
+              latestOrderbookData[activeCoin].general,
+              "general-ask-list",
+              "general-bid-list"
+            );
+          } else {
+            updateOrderbookUI(
+              latestOrderbookData[activeCoin].grouped,
+              "grouped-ask-list",
+              "grouped-bid-list"
+            );
+          }
           fetchAndRenderChart();
         }
       }
+
+      // 호가창 타입 토글 기능
+      document
+        .getElementById("toggle-general")
+        .addEventListener("click", () => {
+          activeOrderbookType = "general";
+          document.getElementById("toggle-general").classList.add("active");
+          document.getElementById("toggle-grouped").classList.remove("active");
+          document
+            .getElementById("general-orderbook-container")
+            .classList.remove("hidden");
+          document
+            .getElementById("grouped-orderbook-container")
+            .classList.add("hidden");
+          updateOrderbookUI(
+            latestOrderbookData[activeCoin].general,
+            "general-ask-list",
+            "general-bid-list"
+          );
+        });
+
+      document
+        .getElementById("toggle-grouped")
+        .addEventListener("click", () => {
+          activeOrderbookType = "grouped";
+          document.getElementById("toggle-general").classList.remove("active");
+          document.getElementById("toggle-grouped").classList.add("active");
+          document
+            .getElementById("general-orderbook-container")
+            .classList.add("hidden");
+          document
+            .getElementById("grouped-orderbook-container")
+            .classList.remove("hidden");
+          updateOrderbookUI(
+            latestOrderbookData[activeCoin].grouped,
+            "grouped-ask-list",
+            "grouped-bid-list"
+          );
+        });
 
       document.getElementById("time-tabs").addEventListener("click", (e) => {
         if (e.target.tagName === "BUTTON") {
@@ -293,8 +359,25 @@
           } else if (upbitData.type === "orderbook") {
             const code = upbitData.code;
             if (marketCodes.includes(code)) {
-              latestOrderbookData[code] = upbitData;
-              if (code === activeCoin) updateOrderbookUI(upbitData);
+              if (upbitData.level === 0) {
+                latestOrderbookData[code].general = upbitData;
+                if (code === activeCoin && activeOrderbookType === "general") {
+                  updateOrderbookUI(
+                    latestOrderbookData[activeCoin].general,
+                    "general-ask-list",
+                    "general-bid-list"
+                  );
+                }
+              } else {
+                latestOrderbookData[code].grouped = upbitData;
+                if (code === activeCoin && activeOrderbookType === "grouped") {
+                  updateOrderbookUI(
+                    latestOrderbookData[activeCoin].grouped,
+                    "grouped-ask-list",
+                    "grouped-bid-list"
+                  );
+                }
+              }
             }
           }
         } catch (e) {
@@ -335,8 +418,15 @@
         }
       }
 
+      // 페이지 로드 시 초기 렌더링
       updateUI(activeCoin);
       fetchAndRenderChart();
+      updateOrderbookUI(
+        latestOrderbookData[activeCoin].general,
+        "general-ask-list",
+        "general-bid-list"
+      );
+
       setInterval(checkAndAutoUpdateChart, 5000);
     </script>
   </body>
