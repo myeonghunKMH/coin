@@ -11,11 +11,9 @@
   </head>
   <body>
     <div class="container">
-      <h1>실시간 암호화폐 시세</h1>
+      <div class="header-summary" id="coin-summary"></div>
 
-      <div class="coin-summary" id="coin-summary"></div>
-
-      <div class="chart-section">
+      <div class="top-chart-section">
         <div class="chart-controls">
           <div class="coin-tabs" id="coin-tabs"></div>
           <div class="time-tabs" id="time-tabs">
@@ -26,27 +24,82 @@
             <button class="time-tab" data-unit="1D">1일</button>
           </div>
         </div>
-        <canvas id="coinChart"></canvas>
+        <div class="chart-container-wrapper">
+          <canvas id="coinChart"></canvas>
+        </div>
       </div>
 
-      <div class="orderbook-section">
-        <h2>호가창 (Orderbook)</h2>
-        <div class="orderbook-toggle">
-          <button id="toggle-general" class="toggle-button active">
-            일반 호가
-          </button>
-          <button id="toggle-grouped" class="toggle-button">누적 호가</button>
+      <div class="bottom-content">
+        <div class="orderbook-wrapper">
+          <div class="orderbook-tab-group">
+            <button id="toggle-general" class="tab-button active">
+              일반 호가
+            </button>
+            <button id="toggle-grouped" class="tab-button">누적 호가</button>
+            <button class="tab-button disabled">호가주문</button>
+          </div>
+
+          <div class="orderbook-container" id="general-orderbook-container">
+            <div class="orderbook-list ask-list" id="general-ask-list"></div>
+            <div
+              class="orderbook-price-info"
+              id="current-trade-price-general"
+            ></div>
+            <div class="orderbook-list bid-list" id="general-bid-list"></div>
+          </div>
+
+          <div
+            class="orderbook-container hidden"
+            id="grouped-orderbook-container"
+          >
+            <div class="orderbook-list ask-list" id="grouped-ask-list"></div>
+            <div
+              class="orderbook-price-info"
+              id="current-trade-price-grouped"
+            ></div>
+            <div class="orderbook-list bid-list" id="grouped-bid-list"></div>
+          </div>
         </div>
-        <div class="orderbook-container" id="general-orderbook-container">
-          <div class="orderbook-list" id="general-ask-list"></div>
-          <div class="orderbook-list" id="general-bid-list"></div>
-        </div>
-        <div
-          class="orderbook-container hidden"
-          id="grouped-orderbook-container"
-        >
-          <div class="orderbook-list" id="grouped-ask-list"></div>
-          <div class="orderbook-list" id="grouped-bid-list"></div>
+
+        <div class="trading-panel">
+          <div class="trading-tabs">
+            <button class="trading-tab active">매수</button>
+            <button class="trading-tab">매도</button>
+          </div>
+          <div class="trading-content">
+            <div class="trading-type">
+              <button class="trading-type-btn active">지정가</button>
+              <button class="trading-type-btn">시장가</button>
+              <button class="trading-type-btn">예약</button>
+            </div>
+            <div class="trading-input-group">
+              <label for="order-price">주문가</label>
+              <input type="text" id="order-price" placeholder="KRW" disabled />
+              <button class="price-btn">-</button>
+              <button class="price-btn">+</button>
+            </div>
+            <div class="trading-input-group">
+              <label for="order-quantity">주문수량</label>
+              <input
+                type="text"
+                id="order-quantity"
+                placeholder="BTC"
+                disabled
+              />
+              <div class="quantity-btns">
+                <button>10%</button>
+                <button>25%</button>
+                <button>50%</button>
+                <button>100%</button>
+              </div>
+            </div>
+            <div class="trading-total-group">
+              <label for="order-total">주문총액</label>
+              <input type="text" id="order-total" placeholder="KRW" disabled />
+            </div>
+            <button class="buy-button" disabled>매수 (미구현)</button>
+            <button class="sell-button" disabled>매도 (미구현)</button>
+          </div>
         </div>
       </div>
     </div>
@@ -72,6 +125,9 @@
           change_rate: 0,
           signed_change_price: 0,
           acc_trade_price_24h: 0,
+          high_price: 0,
+          low_price: 0,
+          prev_closing_price: 0,
         };
         latestOrderbookData[code] = {
           general: null,
@@ -187,31 +243,38 @@
         const summaryContainer = document.getElementById("coin-summary");
         const data = latestTickerData[code];
         if (data) {
-          const changePriceClass =
-            data.signed_change_price >= 0 ? "positive" : "negative";
-          const changeRateClass =
-            data.change_rate >= 0 ? "positive" : "negative";
+          const priceChange = data.trade_price - data.prev_closing_price;
+          const changePriceClass = priceChange >= 0 ? "positive" : "negative";
+          const changeRateClass = priceChange >= 0 ? "positive" : "negative";
 
           summaryContainer.innerHTML = `
-            <div class="coin-summary-item">
-              <span class="summary-label">현재가 (${coinNames[code]})</span>
-              <span class="summary-value">${data.trade_price.toLocaleString()} KRW</span>
-            </div>
-            <div class="coin-summary-item">
-              <span class="summary-label">변화액</span>
-              <span class="summary-value ${changePriceClass}">${data.signed_change_price.toLocaleString()} KRW</span>
-            </div>
-            <div class="coin-summary-item">
-              <span class="summary-label">변동률 (24H)</span>
-              <span class="summary-value ${changeRateClass}">${(
+            <div class="summary-left">
+              <div class="summary-main">
+                <span class="summary-name">${coinNames[code]}</span>
+                <span class="summary-price ${changePriceClass}">${data.trade_price.toLocaleString()} KRW</span>
+              </div>
+              <div class="summary-sub">
+                <span class="${changePriceClass}">${priceChange.toLocaleString()} KRW</span>
+                <span class="${changeRateClass}">${(
             data.change_rate * 100
           ).toFixed(2)}%</span>
+              </div>
             </div>
-            <div class="coin-summary-item">
-              <span class="summary-label">거래대금 (24H)</span>
-              <span class="summary-value">${Math.floor(
-                data.acc_trade_price_24h
-              ).toLocaleString()} KRW</span>
+            <div class="summary-right">
+              <div class="summary-item">
+                <span class="summary-label">고가</span>
+                <span class="summary-value">${data.high_price.toLocaleString()}</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">저가</span>
+                <span class="summary-value">${data.low_price.toLocaleString()}</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">거래대금(24H)</span>
+                <span class="summary-value">${Math.floor(
+                  data.acc_trade_price_24h
+                ).toLocaleString()}</span>
+              </div>
             </div>
           `;
         }
@@ -353,6 +416,9 @@
                 signed_change_price: upbitData.signed_change_price || 0,
                 acc_trade_price_24h: upbitData.acc_trade_price_24h || 0,
                 trade_timestamp: upbitData.trade_timestamp,
+                high_price: upbitData.high_price,
+                low_price: upbitData.low_price,
+                prev_closing_price: upbitData.prev_closing_price,
               };
               if (code === activeCoin) updateUI(activeCoin);
             }
