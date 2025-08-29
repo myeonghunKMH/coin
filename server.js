@@ -12,6 +12,10 @@ const wss = new Server({ server });
 // 프론트엔드 파일을 제공할 정적 폴더 설정
 app.use(express.static("public"));
 
+// ---- 수정된 부분 ----
+// 여러 코인 목록을 추가합니다.
+const marketCodes = ["KRW-BTC", "KRW-ETH", "KRW-XRP"];
+
 // 업비트 웹소켓 연결
 const upbitWs = new WebSocket("wss://api.upbit.com/websocket/v1");
 
@@ -19,15 +23,17 @@ upbitWs.onopen = () => {
   console.log("업비트 웹소켓 서버에 연결되었습니다.");
   const requestMessage = [
     { ticket: uuidv4() },
-    { type: "ticker", codes: ["KRW-BTC"] },
+    { type: "ticker", codes: marketCodes }, // 여러 코인에 대한 티커 요청
+    { format: "DEFAULT" }, // 데이터 형식을 명시합니다.
   ];
   upbitWs.send(JSON.stringify(requestMessage));
 };
 
 upbitWs.onmessage = (event) => {
-  // 업비트에서 받은 데이터를 모든 연결된 클라이언트에게 전송
+  // 업비트에서 받은 데이터를 모든 연결된 클라이언트에게 그대로 전송
   wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
+      // 오류가 발생했던 부분을 단순화하여 원본 데이터를 그대로 전달합니다.
       client.send(event.data);
     }
   });
@@ -40,6 +46,7 @@ upbitWs.onclose = () => {
 upbitWs.onerror = (error) => {
   console.error("업비트 웹소켓 오류:", error);
 };
+// --------------------
 
 // 클라이언트로부터의 웹소켓 연결 처리
 wss.on("connection", (ws) => {

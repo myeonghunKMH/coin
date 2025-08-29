@@ -1,0 +1,95 @@
+/* public/style.css */
+body {
+  font-family: Arial, sans-serif;
+  text-align: center;
+  padding: 20px;
+  background-color: #121212;
+  color: white;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 20px auto;
+  background-color: #1e1e1e;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  flex-grow: 1;
+}
+
+h1 {
+  color: #4caf50;
+  margin-bottom: 30px;
+}
+
+.coin-tabs {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+  gap: 10px;
+}
+
+.coin-tab {
+  background-color: #333;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  font-weight: bold;
+  flex-grow: 1;
+  max-width: 200px;
+}
+
+.coin-tab.active,
+.coin-tab:hover {
+  background-color: #4caf50;
+}
+
+.coin-summary {
+  display: flex;
+  justify-content: space-around;
+  padding: 15px;
+  background-color: #2a2a2a;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.coin-summary-item {
+  flex: 1;
+  min-width: 180px;
+  padding: 10px;
+  text-align: left;
+}
+
+.coin-summary-item span {
+  display: block;
+}
+
+.summary-label {
+  font-size: 0.9em;
+  color: #bbb;
+}
+
+.summary-value {
+  font-size: 1.2em;
+  font-weight: bold;
+}
+
+.positive {
+  color: #00b06b;
+}
+
+.negative {
+  color: #ef4c4c;
+}
+
+.chart-section {
+  width: 100%;
+  height: 500px;
+}

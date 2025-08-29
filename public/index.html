@@ -2,118 +2,164 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <title>실시간 비트코인 차트 (Node.js)</title>
+    <title>실시간 암호화폐 모의투자 (Node.js)</title>
+    <link rel="stylesheet" href="style.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        text-align: center;
-        padding: 20px;
-        background-color: #121212;
-        color: white;
-      }
-      .container {
-        max-width: 900px;
-        margin: auto;
-        background-color: #1e1e1e;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-      }
-      h1 {
-        color: #4caf50;
-      }
-      #current-price {
-        font-size: 2.5em;
-        font-weight: bold;
-        margin: 20px 0;
-      }
-      #chart-container {
-        position: relative;
-        height: 400px;
-      }
-    </style>
   </head>
   <body>
     <div class="container">
-      <h1>실시간 비트코인 차트</h1>
-      <div id="current-price">로딩 중...</div>
-      <div id="chart-container">
-        <canvas id="btcChart"></canvas>
+      <h1>실시간 암호화폐 시세</h1>
+
+      <div class="coin-tabs" id="coin-tabs"></div>
+
+      <div class="coin-summary" id="coin-summary"></div>
+
+      <div class="chart-section">
+        <canvas id="coinChart"></canvas>
       </div>
     </div>
 
     <script>
-      const ctx = document.getElementById("btcChart").getContext("2d");
-      const CHART_HISTORY_LIMIT = 50;
-      let btcChart;
-
-      const chartData = {
-        labels: [],
-        datasets: [
-          {
-            label: "BTC/KRW 가격",
-            data: [],
-            borderColor: "rgb(75, 192, 192)",
-            tension: 0.1,
-            fill: false,
-          },
-        ],
+      const marketCodes = ["KRW-BTC", "KRW-ETH", "KRW-XRP"];
+      const coinNames = {
+        "KRW-BTC": "비트코인",
+        "KRW-ETH": "이더리움",
+        "KRW-XRP": "리플",
       };
+      const CHART_HISTORY_LIMIT = 100;
 
-      const chartOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: {
-          duration: 0,
-        },
-        scales: {
-          x: {
-            title: {
-              display: true,
-              text: "시간",
-              color: "white",
-            },
-            grid: {
-              color: "rgba(255, 255, 255, 0.1)",
-            },
-            ticks: {
-              color: "white",
-            },
-          },
-          y: {
-            title: {
-              display: true,
-              text: "가격(KRW)",
-              color: "white",
-            },
-            grid: {
-              color: "rgba(255, 255, 255, 0.1)",
-            },
-            ticks: {
-              color: "white",
-            },
-          },
-        },
-        plugins: {
-          legend: {
-            labels: {
-              color: "white",
-            },
-          },
-          tooltip: {
-            backgroundColor: "rgba(0, 0, 0, 0.7)",
-          },
-        },
-      };
+      let chartDataStore = {};
+      let latestTickerData = {};
 
-      btcChart = new Chart(ctx, {
-        type: "line",
-        data: chartData,
-        options: chartOptions,
+      let activeCoin = "KRW-BTC";
+
+      marketCodes.forEach((code) => {
+        chartDataStore[code] = {
+          labels: [],
+          datasets: [
+            {
+              label: `${coinNames[code]} 가격`,
+              data: [],
+              borderColor: "rgb(75, 192, 192)",
+              tension: 0.1,
+              fill: false,
+            },
+          ],
+        };
+        latestTickerData[code] = {
+          trade_price: 0,
+          change_rate: 0,
+          signed_change_price: 0,
+          acc_trade_price_24h: 0,
+        };
       });
 
-      // 로컬 웹소켓 서버에 연결
+      const ctx = document.getElementById("coinChart").getContext("2d");
+
+      // --- 수정된 부분: y축과 x축 설정을 위한 함수 ---
+      function getChartOptions(currentPrice) {
+        // 현재 가격의 ±0.5% 범위를 기준으로 y축 min/max 설정
+        const buffer = currentPrice * 0.005;
+        const yAxisMin = Math.floor((currentPrice - buffer) / 100) * 100;
+        const yAxisMax = Math.ceil((currentPrice + buffer) / 100) * 100;
+
+        return {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 0 },
+          scales: {
+            x: {
+              title: { display: true, text: "시간", color: "white" },
+              grid: { color: "rgba(255, 255, 255, 0.1)" },
+              ticks: {
+                color: "white",
+                autoSkip: true,
+                maxTicksLimit: 10,
+              },
+            },
+            y: {
+              title: { display: true, text: "가격(KRW)", color: "white" },
+              grid: { color: "rgba(255, 255, 255, 0.1)" },
+              ticks: { color: "white" },
+              min: yAxisMin,
+              max: yAxisMax,
+            },
+          },
+          plugins: {
+            legend: { labels: { color: "white" } },
+            tooltip: {
+              backgroundColor: "rgba(0, 0, 0, 0.7)",
+              titleColor: "white",
+              bodyColor: "white",
+            },
+          },
+        };
+      }
+      // ------------------------------------
+
+      let mainChart = new Chart(ctx, {
+        type: "line",
+        data: chartDataStore[activeCoin],
+        options: getChartOptions(latestTickerData[activeCoin].trade_price), // 초기화 시점에 한 번 호출
+      });
+
+      function updateUI(code) {
+        const tabsContainer = document.getElementById("coin-tabs");
+        tabsContainer.innerHTML = "";
+        marketCodes.forEach((c) => {
+          const tab = document.createElement("div");
+          tab.className = `coin-tab ${c === activeCoin ? "active" : ""}`;
+          tab.innerText = coinNames[c];
+          tab.onclick = () => switchCoinChart(c);
+          tabsContainer.appendChild(tab);
+        });
+
+        const summaryContainer = document.getElementById("coin-summary");
+        const data = latestTickerData[code];
+        if (data) {
+          const changePriceClass =
+            data.signed_change_price >= 0 ? "positive" : "negative";
+          const changeRateClass =
+            data.change_rate >= 0 ? "positive" : "negative";
+
+          summaryContainer.innerHTML = `
+            <div class="coin-summary-item">
+              <span class="summary-label">현재가 (${coinNames[code]})</span>
+              <span class="summary-value">${data.trade_price.toLocaleString()} KRW</span>
+            </div>
+            <div class="coin-summary-item">
+              <span class="summary-label">변화액</span>
+              <span class="summary-value ${changePriceClass}">${data.signed_change_price.toLocaleString()} KRW</span>
+            </div>
+            <div class="coin-summary-item">
+              <span class="summary-label">변동률 (24H)</span>
+              <span class="summary-value ${changeRateClass}">${(
+            data.change_rate * 100
+          ).toFixed(2)}%</span>
+            </div>
+            <div class="coin-summary-item">
+              <span class="summary-label">거래대금 (24H)</span>
+              <span class="summary-value">${Math.floor(
+                data.acc_trade_price_24h
+              ).toLocaleString()} KRW</span>
+            </div>
+          `;
+        }
+
+        if (mainChart) {
+          mainChart.data = chartDataStore[activeCoin];
+          // 차트 옵션 업데이트는 handleWebSocketMessage에서 처리되므로 여기서는 제거
+          mainChart.update();
+        }
+      }
+
+      function switchCoinChart(code) {
+        activeCoin = code;
+        updateUI(code);
+      }
+
+      updateUI(activeCoin);
+
       const ws = new WebSocket("ws://localhost:3000");
 
       ws.onopen = () => {
@@ -121,63 +167,67 @@
       };
 
       ws.onmessage = (event) => {
-        // 데이터가 Blob 객체인지 확인
         if (event.data instanceof Blob) {
           const reader = new FileReader();
           reader.onload = () => {
-            try {
-              const upbitData = JSON.parse(reader.result);
-              if (upbitData.trade_price) {
-                // 차트 및 가격 업데이트 로직
-                const now = new Date(upbitData.trade_timestamp);
-                const timeString = now.toLocaleTimeString();
-
-                document.getElementById(
-                  "current-price"
-                ).innerText = `현재가: ${upbitData.trade_price.toLocaleString()} KRW`;
-
-                chartData.labels.push(timeString);
-                chartData.datasets[0].data.push(upbitData.trade_price);
-
-                if (chartData.labels.length > CHART_HISTORY_LIMIT) {
-                  chartData.labels.shift();
-                  chartData.datasets[0].data.shift();
-                }
-
-                btcChart.update();
-              }
-            } catch (e) {
-              console.error("웹소켓 메시지 파싱 오류:", e);
-            }
+            handleWebSocketMessage(reader.result);
           };
           reader.readAsText(event.data);
         } else {
-          // 데이터가 이미 문자열인 경우 (JSON.parse가 바로 가능)
-          try {
-            const upbitData = JSON.parse(event.data);
-            if (upbitData.trade_price) {
-              // 차트 및 가격 업데이트 로직 (위와 동일)
+          handleWebSocketMessage(event.data);
+        }
+      };
+
+      function handleWebSocketMessage(data) {
+        try {
+          const upbitData = JSON.parse(data);
+
+          if (
+            upbitData &&
+            upbitData.code &&
+            marketCodes.includes(upbitData.code) &&
+            upbitData.trade_price
+          ) {
+            const code = upbitData.code;
+
+            latestTickerData[code] = {
+              trade_price: upbitData.trade_price,
+              change_rate: upbitData.change_rate || 0,
+              signed_change_price: upbitData.signed_change_price || 0,
+              acc_trade_price_24h: upbitData.acc_trade_price_24h || 0,
+              trade_timestamp: upbitData.trade_timestamp,
+            };
+
+            if (code === activeCoin) {
               const now = new Date(upbitData.trade_timestamp);
               const timeString = now.toLocaleTimeString();
 
-              document.getElementById(
-                "current-price"
-              ).innerText = `현재가: ${upbitData.trade_price.toLocaleString()} KRW`;
+              chartDataStore[code].labels.push(timeString);
+              chartDataStore[code].datasets[0].data.push(upbitData.trade_price);
 
-              chartData.labels.push(timeString);
-              chartData.datasets[0].data.push(upbitData.trade_price);
-
-              if (chartData.labels.length > CHART_HISTORY_LIMIT) {
-                chartData.labels.shift();
-                chartData.datasets[0].data.shift();
+              if (chartDataStore[code].labels.length > CHART_HISTORY_LIMIT) {
+                chartDataStore[code].labels.shift();
+                chartDataStore[code].datasets[0].data.shift();
               }
 
-              btcChart.update();
+              // 최신 가격을 기반으로 차트 옵션을 업데이트
+              mainChart.options = getChartOptions(upbitData.trade_price);
+              mainChart.update();
             }
-          } catch (e) {
-            console.error("웹소켓 메시지 파싱 오류:", e);
+
+            updateUI(activeCoin);
           }
+        } catch (e) {
+          console.error("웹소켓 메시지 파싱 오류:", e);
         }
+      }
+
+      ws.onclose = () => {
+        console.log("웹소켓 연결이 끊어졌습니다.");
+      };
+
+      ws.onerror = (error) => {
+        console.error("웹소켓 오류 발생:", error);
       };
     </script>
   </body>
