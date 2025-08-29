@@ -5,16 +5,27 @@
     <title>실시간 암호화폐 모의투자 (Node.js)</title>
     <link rel="stylesheet" href="style.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1"></script>
   </head>
   <body>
     <div class="container">
       <h1>실시간 암호화폐 시세</h1>
 
-      <div class="coin-tabs" id="coin-tabs"></div>
-
       <div class="coin-summary" id="coin-summary"></div>
 
       <div class="chart-section">
+        <div class="chart-controls">
+          <div class="coin-tabs" id="coin-tabs"></div>
+          <div class="time-tabs" id="time-tabs">
+            <button class="time-tab" data-unit="5">5분</button>
+            <button class="time-tab" data-unit="15">15분</button>
+            <button class="time-tab active" data-unit="60">1시간</button>
+            <button class="time-tab" data-unit="240">4시간</button>
+            <button class="time-tab" data-unit="1D">1일</button>
+          </div>
+        </div>
         <canvas id="coinChart"></canvas>
       </div>
     </div>
@@ -26,26 +37,12 @@
         "KRW-ETH": "이더리움",
         "KRW-XRP": "리플",
       };
-      const CHART_HISTORY_LIMIT = 100;
 
-      let chartDataStore = {};
       let latestTickerData = {};
-
       let activeCoin = "KRW-BTC";
+      let activeUnit = "60";
 
       marketCodes.forEach((code) => {
-        chartDataStore[code] = {
-          labels: [],
-          datasets: [
-            {
-              label: `${coinNames[code]} 가격`,
-              data: [],
-              borderColor: "rgb(75, 192, 192)",
-              tension: 0.1,
-              fill: false,
-            },
-          ],
-        };
         latestTickerData[code] = {
           trade_price: 0,
           change_rate: 0,
@@ -55,53 +52,94 @@
       });
 
       const ctx = document.getElementById("coinChart").getContext("2d");
+      let mainChart = null;
 
-      // --- 수정된 부분: y축과 x축 설정을 위한 함수 ---
-      function getChartOptions(currentPrice) {
-        // 현재 가격의 ±0.5% 범위를 기준으로 y축 min/max 설정
-        const buffer = currentPrice * 0.005;
-        const yAxisMin = Math.floor((currentPrice - buffer) / 100) * 100;
-        const yAxisMax = Math.ceil((currentPrice + buffer) / 100) * 100;
+      async function fetchAndRenderChart() {
+        if (!activeCoin || !activeUnit) return;
 
-        return {
-          responsive: true,
-          maintainAspectRatio: false,
-          animation: { duration: 0 },
-          scales: {
-            x: {
-              title: { display: true, text: "시간", color: "white" },
-              grid: { color: "rgba(255, 255, 255, 0.1)" },
-              ticks: {
-                color: "white",
-                autoSkip: true,
-                maxTicksLimit: 10,
+        try {
+          const response = await fetch(
+            `/api/candles?unit=${activeUnit}&market=${activeCoin}`
+          );
+          const data = await response.json();
+
+          const sortedData = data.reverse();
+          const chartData = sortedData.map((d) => ({
+            x: new Date(d.candle_date_time_kst).getTime(),
+            o: d.opening_price,
+            h: d.high_price,
+            l: d.low_price,
+            c: d.trade_price,
+          }));
+
+          const dataset = [
+            {
+              label: `${coinNames[activeCoin]} ${activeUnit} 캔들`,
+              data: chartData,
+              borderColor: "rgb(75, 192, 192)",
+              tension: 0.1,
+            },
+          ];
+
+          let unitForChart;
+          if (activeUnit === "1D") {
+            unitForChart = "day";
+          } else if (parseInt(activeUnit) >= 60) {
+            unitForChart = "hour";
+          } else {
+            unitForChart = "minute";
+          }
+
+          const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                mode: "index",
+                intersect: false,
               },
             },
-            y: {
-              title: { display: true, text: "가격(KRW)", color: "white" },
-              grid: { color: "rgba(255, 255, 255, 0.1)" },
-              ticks: { color: "white" },
-              min: yAxisMin,
-              max: yAxisMax,
+            scales: {
+              x: {
+                type: "time",
+                time: {
+                  unit: unitForChart,
+                  displayFormats: {
+                    minute: "HH:mm",
+                    hour: "HH:mm",
+                    day: "MM-DD",
+                  },
+                },
+                title: { display: true, text: "시간", color: "white" },
+                grid: { color: "rgba(255, 255, 255, 0.1)" },
+                ticks: { color: "white" },
+              },
+              y: {
+                title: { display: true, text: "가격(KRW)", color: "white" },
+                grid: { color: "rgba(255, 255, 255, 0.1)" },
+                ticks: { color: "white" },
+              },
             },
-          },
-          plugins: {
-            legend: { labels: { color: "white" } },
-            tooltip: {
-              backgroundColor: "rgba(0, 0, 0, 0.7)",
-              titleColor: "white",
-              bodyColor: "white",
-            },
-          },
-        };
-      }
-      // ------------------------------------
+          };
 
-      let mainChart = new Chart(ctx, {
-        type: "line",
-        data: chartDataStore[activeCoin],
-        options: getChartOptions(latestTickerData[activeCoin].trade_price), // 초기화 시점에 한 번 호출
-      });
+          // --- 수정된 부분: 차트 인스턴스 존재 여부 확인 및 파괴 ---
+          if (mainChart) {
+            mainChart.destroy(); // 기존 차트 파괴
+          }
+          // ----------------------------------------------------
+
+          mainChart = new Chart(ctx, {
+            type: "candlestick",
+            data: {
+              datasets: dataset,
+            },
+            options: chartOptions,
+          });
+        } catch (error) {
+          console.error("캔들 데이터 로딩 오류:", error);
+        }
+      }
 
       function updateUI(code) {
         const tabsContainer = document.getElementById("coin-tabs");
@@ -110,7 +148,7 @@
           const tab = document.createElement("div");
           tab.className = `coin-tab ${c === activeCoin ? "active" : ""}`;
           tab.innerText = coinNames[c];
-          tab.onclick = () => switchCoinChart(c);
+          tab.onclick = () => switchCoin(c);
           tabsContainer.appendChild(tab);
         });
 
@@ -145,26 +183,28 @@
             </div>
           `;
         }
+      }
 
-        if (mainChart) {
-          mainChart.data = chartDataStore[activeCoin];
-          // 차트 옵션 업데이트는 handleWebSocketMessage에서 처리되므로 여기서는 제거
-          mainChart.update();
+      function switchCoin(code) {
+        if (activeCoin !== code) {
+          activeCoin = code;
+          updateUI(activeCoin);
+          fetchAndRenderChart();
         }
       }
 
-      function switchCoinChart(code) {
-        activeCoin = code;
-        updateUI(code);
-      }
-
-      updateUI(activeCoin);
+      document.getElementById("time-tabs").addEventListener("click", (e) => {
+        if (e.target.tagName === "BUTTON") {
+          document
+            .querySelectorAll(".time-tab")
+            .forEach((btn) => btn.classList.remove("active"));
+          e.target.classList.add("active");
+          activeUnit = e.target.dataset.unit;
+          fetchAndRenderChart();
+        }
+      });
 
       const ws = new WebSocket("ws://localhost:3000");
-
-      ws.onopen = () => {
-        console.log("로컬 웹소켓 서버에 연결되었습니다.");
-      };
 
       ws.onmessage = (event) => {
         if (event.data instanceof Blob) {
@@ -181,7 +221,6 @@
       function handleWebSocketMessage(data) {
         try {
           const upbitData = JSON.parse(data);
-
           if (
             upbitData &&
             upbitData.code &&
@@ -189,7 +228,6 @@
             upbitData.trade_price
           ) {
             const code = upbitData.code;
-
             latestTickerData[code] = {
               trade_price: upbitData.trade_price,
               change_rate: upbitData.change_rate || 0,
@@ -197,24 +235,6 @@
               acc_trade_price_24h: upbitData.acc_trade_price_24h || 0,
               trade_timestamp: upbitData.trade_timestamp,
             };
-
-            if (code === activeCoin) {
-              const now = new Date(upbitData.trade_timestamp);
-              const timeString = now.toLocaleTimeString();
-
-              chartDataStore[code].labels.push(timeString);
-              chartDataStore[code].datasets[0].data.push(upbitData.trade_price);
-
-              if (chartDataStore[code].labels.length > CHART_HISTORY_LIMIT) {
-                chartDataStore[code].labels.shift();
-                chartDataStore[code].datasets[0].data.shift();
-              }
-
-              // 최신 가격을 기반으로 차트 옵션을 업데이트
-              mainChart.options = getChartOptions(upbitData.trade_price);
-              mainChart.update();
-            }
-
             updateUI(activeCoin);
           }
         } catch (e) {
@@ -222,13 +242,8 @@
         }
       }
 
-      ws.onclose = () => {
-        console.log("웹소켓 연결이 끊어졌습니다.");
-      };
-
-      ws.onerror = (error) => {
-        console.error("웹소켓 오류 발생:", error);
-      };
+      updateUI(activeCoin);
+      fetchAndRenderChart();
     </script>
   </body>
 </html>
