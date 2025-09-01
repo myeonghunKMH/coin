@@ -428,4 +428,88 @@ body {
   width: 100%;
 }
 
-/* ... (나머지 CSS 코드) */
+/* 시나리오 페이지 */
+.main-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  text-align: center;
+}
+.main-container h1 {
+  font-size: 3rem;
+  margin-bottom: 20px;
+  color: #e0e0e0; /* 제목 색상 통일 */
+}
+.button-group {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 30px;
+}
+.main-button {
+  padding: 15px 30px;
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: white;
+  background-color: #337ab7;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+.main-button:hover {
+  background-color: #23527c;
+}
+
+/* 과거 시나리오 페이지 스타일 */
+.scenario-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  text-align: center;
+}
+.scenario-container h1 {
+  font-size: 2.5rem;
+  margin-bottom: 30px;
+  color: #e0e0e0;
+}
+.scenario-button-group {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.scenario-button {
+  padding: 20px 40px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: white;
+  background-color: #337ab7;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+.scenario-button:hover {
+  background-color: #23527c;
+}
+
+/* 뒤로가기 버튼 스타일 */
+.back-button {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  padding: 10px 15px;
+  font-size: 0.9rem;
+  background-color: #444;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+.back-button:hover {
+  background-color: #555;
+}
