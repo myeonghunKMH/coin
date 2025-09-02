@@ -747,42 +747,48 @@ function setupEventListeners() {
 
   // 수량 퍼센트 버튼
   document.addEventListener("click", (e) => {
-    if (e.target.tagName === "BUTTON" && e.target.dataset.percent) {
-      const percent = parseInt(e.target.dataset.percent) / 100;
+  if (e.target.tagName === "BUTTON" && e.target.dataset.percent) {
+    const percent = parseInt(e.target.dataset.percent) / 100;
 
-      // 지정가 모드의 수량 버튼
-      if (
-        activeTradingType === "limit" &&
-        e.target.closest(".quantity-input-group")
-      ) {
-        const orderPrice = parseFloat(
-          orderPriceInput?.value.replace(/,/g, "") || "0"
-        );
-        let calculatedQuantity = 0;
+    // 지정가 모드의 수량 버튼
+    if (
+      activeTradingType === "limit" &&
+      e.target.closest(".quantity-input-group")
+    ) {
+      const orderPrice = parseFloat(
+        orderPriceInput?.value.replace(/,/g, "") || "0"
+      );
+      let calculatedQuantity = 0;
 
-        if (activeTradingSide === "bid" && orderPrice > 0) {
-          calculatedQuantity = (userKRWBalance * percent) / orderPrice;
-        } else if (activeTradingSide === "ask") {
-          calculatedQuantity = userCoinBalance[activeCoin] * percent;
-        }
-
-        if (orderQuantityInput) {
-          orderQuantityInput.value = calculatedQuantity.toFixed(8);
-          updateTotal();
-        }
+      if (activeTradingSide === "bid" && orderPrice > 0) {
+        calculatedQuantity = (userKRWBalance * percent) / orderPrice;
+      } else if (activeTradingSide === "ask") {
+        calculatedQuantity = userCoinBalance[activeCoin] * percent;
       }
-      // 시장가 모드의 총액 버튼
-      else if (
-        activeTradingType === "market" &&
-        e.target.closest(".trading-total-group")
-      ) {
-        const totalAmount = userKRWBalance * percent;
+
+      if (orderQuantityInput) {
+        orderQuantityInput.value = calculatedQuantity.toFixed(8);
+        updateTotal();
+      }
+    }
+    // 시장가 모드의 퍼센트 버튼
+    else if (activeTradingType === "market") {
+      if (activeTradingSide === "bid") {
+        const totalAmount = Math.floor(userKRWBalance * percent); // 소수점 제거
         if (orderTotalMarketInput) {
           orderTotalMarketInput.value = totalAmount.toLocaleString("ko-KR");
         }
+      } else if (activeTradingSide === "ask") {
+        // 시장가 매도: 코인 수량 퍼센트
+        const calculatedQuantity = userCoinBalance[activeCoin] * percent;
+        if (orderQuantityInput) {
+          orderQuantityInput.value = calculatedQuantity.toFixed(8);
+        }
       }
     }
-  });
+  }
+});
+
 
   // 거래 버튼
   document.addEventListener("click", (e) => {
