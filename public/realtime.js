@@ -31,8 +31,6 @@ const orderPriceInput = document.getElementById("order-price");
 const orderQuantityInput = document.getElementById("order-quantity");
 const orderTotalInput = document.getElementById("order-total");
 const orderTotalMarketInput = document.getElementById("order-total-market");
-const buyButton = document.querySelector(".bid-button");
-const sellButton = document.querySelector(".ask-button");
 const pricePercentageDropdown = document.getElementById(
   "price-percentage-dropdown"
 );
@@ -184,7 +182,7 @@ function checkAndAutoUpdateChart() {
 function updateUI(code) {
   // 코인 탭 업데이트
   const tabsContainer = document.getElementById("coin-tabs");
-  if (tabsContainer.children.length === 0) {
+  if (tabsContainer && tabsContainer.children.length === 0) {
     marketCodes.forEach((c) => {
       const tab = document.createElement("div");
       tab.className = `coin-tab ${c === activeCoin ? "active" : ""}`;
@@ -206,7 +204,7 @@ function updateUI(code) {
   const summaryContainer = document.getElementById("coin-summary");
   const data = latestTickerData[code];
 
-  if (data) {
+  if (data && summaryContainer) {
     const priceChange = data.trade_price - data.prev_closing_price;
     const changePriceClass = priceChange >= 0 ? "positive" : "negative";
     const changeRateClass = priceChange >= 0 ? "positive" : "negative";
@@ -250,6 +248,8 @@ function updateOrderbookUI(orderbook, askListId, bidListId) {
   const askList = document.getElementById(askListId);
   const bidList = document.getElementById(bidListId);
 
+  if (!askList || !bidList) return;
+
   askList.innerHTML = "";
   bidList.innerHTML = "";
 
@@ -269,7 +269,7 @@ function updateOrderbookUI(orderbook, askListId, bidListId) {
       <span class="orderbook-size">${unit.ask_size.toFixed(4)}</span>
     `;
     div.onclick = () => {
-      if (activeTradingType === "limit") {
+      if (activeTradingType === "limit" && orderPriceInput) {
         orderPriceInput.value = unit.ask_price.toLocaleString("ko-KR");
         updateTotal();
       }
@@ -286,7 +286,7 @@ function updateOrderbookUI(orderbook, askListId, bidListId) {
       <span class="orderbook-size">${unit.bid_size.toFixed(4)}</span>
     `;
     div.onclick = () => {
-      if (activeTradingType === "limit") {
+      if (activeTradingType === "limit" && orderPriceInput) {
         orderPriceInput.value = unit.bid_price.toLocaleString("ko-KR");
         updateTotal();
       }
@@ -315,6 +315,15 @@ function switchCoin(code) {
         "grouped-ask-list",
         "grouped-bid-list"
       );
+    }
+
+    // 지정가 모드일 때 주문가를 새 코인의 현재가로 설정
+    if (activeTradingType === "limit" && orderPriceInput) {
+      const currentPrice = latestTickerData[activeCoin]?.trade_price || 0;
+      if (currentPrice > 0) {
+        orderPriceInput.value = currentPrice.toLocaleString("ko-KR");
+        updateTotal(); // 총액도 다시 계산
+      }
     }
 
     fetchAndRenderChart();
@@ -360,9 +369,9 @@ function handleWebSocketMessage(data) {
 
         if (code === activeCoin) {
           updateUI(activeCoin);
-          // 개선: 가격 필드를 무조건 업데이트하지 않고, 필요할 때만 (e.g., 필드가 비어 있을 때만) 업데이트
           if (
             activeTradingType === "limit" &&
+            orderPriceInput &&
             (!orderPriceInput.value || orderPriceInput.value.trim() === "")
           ) {
             const currentPrice = latestTickerData[activeCoin]?.trade_price || 0;
@@ -370,7 +379,7 @@ function handleWebSocketMessage(data) {
               orderPriceInput.value = currentPrice.toLocaleString("ko-KR");
             }
           }
-          updateTradingPanel(); // 잔고 등 다른 부분 업데이트
+          updateTradingPanel();
         }
       }
     } else if (upbitData.type === "orderbook") {
@@ -409,35 +418,52 @@ function updateTradingPanel() {
   const coinCode = activeCoin;
   const coinName = coinCode.split("-")[1];
 
-  // 매수/매도 탭 전환 시 주문 가능 금액/수량 업데이트
+  // 매수/매도 버튼 표시/숨김
+  const buyButton = document.querySelector(".bid-button");
+  const sellButton = document.querySelector(".ask-button");
+
   if (activeTradingSide === "bid") {
-    availableAmountValue.textContent = `${userKRWBalance.toLocaleString()} KRW`;
-    buyButton.classList.remove("hidden");
-    sellButton.classList.add("hidden");
+    if (availableAmountValue) {
+      availableAmountValue.textContent = `${userKRWBalance.toLocaleString()} KRW`;
+    }
+    if (buyButton) buyButton.classList.remove("hidden");
+    if (sellButton) sellButton.classList.add("hidden");
   } else {
     const coinBalance = userCoinBalance[activeCoin] || 0;
-    availableAmountValue.textContent = `${coinBalance.toFixed(8)} ${coinName}`;
-    buyButton.classList.add("hidden");
-    sellButton.classList.remove("hidden");
+    if (availableAmountValue) {
+      availableAmountValue.textContent = `${coinBalance.toFixed(
+        8
+      )} ${coinName}`;
+    }
+    if (buyButton) buyButton.classList.add("hidden");
+    if (sellButton) sellButton.classList.remove("hidden");
   }
 
+  // UI 요소들 가져오기
   const priceGroup = document.querySelector(".price-input-group");
   const quantityGroup = document.querySelector(".quantity-input-group");
-  const totalGroupLimit = document.querySelector(
+  const limitTotalGroup = document.querySelector(
     ".trading-total-group:not(.hidden)"
   );
-  const totalGroupMarket = document.querySelectorAll(".trading-total-group")[1]; // 두 번째 total group
+  const marketTotalGroup = document.querySelector(
+    ".trading-total-group.hidden"
+  );
 
-  // 지정가/시장가에 따라 UI 변경
+  // 모든 요소를 일단 숨김
+  if (priceGroup) priceGroup.style.display = "none";
+  if (quantityGroup) quantityGroup.style.display = "none";
+  if (limitTotalGroup) limitTotalGroup.style.display = "none";
+  if (marketTotalGroup) marketTotalGroup.style.display = "none";
+
   if (activeTradingType === "limit") {
-    priceGroup?.classList.remove("hidden");
-    quantityGroup?.classList.remove("hidden");
-    totalGroupLimit?.classList.remove("hidden");
-    totalGroupMarket?.classList.add("hidden");
+    // 지정가: 가격, 수량, 총액(계산된) 모두 표시
+    if (priceGroup) priceGroup.style.display = "flex";
+    if (quantityGroup) quantityGroup.style.display = "flex";
+    if (limitTotalGroup) limitTotalGroup.style.display = "flex";
 
+    // 가격 입력 활성화
     if (orderPriceInput) {
       orderPriceInput.disabled = false;
-      // 개선: 가격 필드를 초기화하지 않고, 비어 있을 때만 현재 가격으로 설정 (handleWebSocketMessage에서 이미 처리됨)
       if (!orderPriceInput.value || orderPriceInput.value.trim() === "") {
         const currentPrice = latestTickerData[activeCoin]?.trade_price || 0;
         if (currentPrice > 0) {
@@ -445,25 +471,14 @@ function updateTradingPanel() {
         }
       }
     }
-
-    // 개선: 기존 값 유지, 무조건 비우지 않음
-    // if (orderQuantityInput) orderQuantityInput.value = "";
-    // if (orderTotalInput) orderTotalInput.value = "";
   } else if (activeTradingType === "market") {
-    priceGroup?.classList.add("hidden");
-
+    // 시장가
     if (activeTradingSide === "bid") {
-      quantityGroup?.classList.add("hidden");
-      totalGroupLimit?.classList.add("hidden");
-      totalGroupMarket?.classList.remove("hidden");
-      // 개선: 기존 값 유지, 무조건 비우지 않음
-      // if (orderTotalMarketInput) orderTotalMarketInput.value = "";
-    } else if (activeTradingSide === "ask") {
-      quantityGroup?.classList.remove("hidden");
-      totalGroupLimit?.classList.add("hidden");
-      totalGroupMarket?.classList.add("hidden");
-      // 개선: 기존 값 유지, 무조건 비우지 않음
-      // if (orderQuantityInput) orderQuantityInput.value = "";
+      // 시장가 매수: 총액 입력만 표시
+      if (marketTotalGroup) marketTotalGroup.style.display = "flex";
+    } else {
+      // 시장가 매도: 수량 입력만 표시
+      if (quantityGroup) quantityGroup.style.display = "flex";
     }
   }
 
@@ -474,13 +489,28 @@ function createPercentageDropdown() {
   if (!pricePercentageDropdown) return;
 
   pricePercentageDropdown.innerHTML = "";
-  const percentages = [-20, -15, -10, -5, 0, 5, 10, 15, 20];
 
+  // 드롭다운 닫혔을 때 보여줄 기본 텍스트
+  const placeholderOption = document.createElement("option");
+  placeholderOption.value = "";
+  placeholderOption.textContent = "현재가 대비 설정";
+  placeholderOption.disabled = true;
+  placeholderOption.selected = true;
+  placeholderOption.hidden = true; // 펼쳤을 때 안 보이게
+  pricePercentageDropdown.appendChild(placeholderOption);
+
+  // 실제 퍼센트 옵션들
+  const percentages = [-20, -15, -10, -5, 0, 5, 10, 15, 20];
   percentages.forEach((percent) => {
     const option = document.createElement("option");
     option.value = percent;
     option.textContent = `${percent}%`;
     pricePercentageDropdown.appendChild(option);
+  });
+
+  // 드롭다운이 닫힐 때 항상 기본 텍스트로 초기화
+  pricePercentageDropdown.addEventListener("blur", () => {
+    pricePercentageDropdown.value = "";
   });
 }
 
@@ -491,7 +521,9 @@ function updateTotal() {
   const quantity = parseFloat(orderQuantityInput.value);
 
   if (!isNaN(price) && !isNaN(quantity)) {
-    orderTotalInput.value = (price * quantity).toLocaleString("ko-KR");
+    // 소수점 버림 처리
+    const totalAmount = Math.floor(price * quantity);
+    orderTotalInput.value = totalAmount.toLocaleString("ko-KR");
   } else {
     orderTotalInput.value = "";
   }
@@ -653,15 +685,32 @@ function setupEventListeners() {
     });
   });
 
-  // 거래 타입 버튼
-  document.querySelectorAll(".trading-type-btn").forEach((btn) => {
+  // 거래 타입 버튼 (지정가/시장가) - 수정된 부분
+  document.querySelectorAll(".trading-type-btn").forEach((btn, index) => {
     btn.addEventListener("click", () => {
       if (btn.classList.contains("disabled")) return;
+
+      // 현재 활성화된 버튼에서 active 클래스 제거
       document
         .querySelectorAll(".trading-type-btn")
         .forEach((b) => b.classList.remove("active"));
+
+      // 클릭된 버튼에 active 클래스 추가
       btn.classList.add("active");
-      activeTradingType = btn.dataset.type;
+
+      // 인덱스로 거래 타입 결정 (더 확실한 방법)
+      if (index === 0) {
+        activeTradingType = "limit";
+      } else if (index === 1) {
+        activeTradingType = "market";
+      }
+
+      console.log(
+        "거래 타입 변경:",
+        activeTradingType,
+        "버튼 텍스트:",
+        btn.textContent
+      ); // 디버그용
       updateTradingPanel();
     });
   });
@@ -672,11 +721,14 @@ function setupEventListeners() {
       if (!orderPriceInput) return;
       let currentPrice =
         parseFloat(orderPriceInput.value.replace(/,/g, "")) || 0;
-      if (btn.classList.contains("minus")) {
-        currentPrice -= 1000;
+      const step = getPriceStep(currentPrice);
+
+      if (btn.textContent.includes("-") || btn.classList.contains("minus")) {
+        currentPrice -= step;
       } else {
-        currentPrice += 1000;
+        currentPrice += step;
       }
+
       orderPriceInput.value = Math.max(0, currentPrice).toLocaleString("ko-KR");
       updateTotal();
     });
@@ -686,7 +738,7 @@ function setupEventListeners() {
   pricePercentageDropdown?.addEventListener("change", (e) => {
     const currentPrice = latestTickerData[activeCoin]?.trade_price || 0;
     const percent = parseInt(e.target.value) / 100;
-    const newPrice = currentPrice * (1 + percent);
+    const newPrice = Math.floor(currentPrice * (1 + percent));
     if (orderPriceInput) {
       orderPriceInput.value = newPrice.toLocaleString("ko-KR");
       updateTotal();
@@ -694,14 +746,14 @@ function setupEventListeners() {
   });
 
   // 수량 퍼센트 버튼
-  document.querySelectorAll(".quantity-btns").forEach((group) => {
-    group.addEventListener("click", (e) => {
-      if (e.target.tagName !== "BUTTON") return;
+  document.addEventListener("click", (e) => {
+    if (e.target.tagName === "BUTTON" && e.target.dataset.percent) {
       const percent = parseInt(e.target.dataset.percent) / 100;
 
+      // 지정가 모드의 수량 버튼
       if (
         activeTradingType === "limit" &&
-        group.closest(".quantity-input-group")
+        e.target.closest(".quantity-input-group")
       ) {
         const orderPrice = parseFloat(
           orderPriceInput?.value.replace(/,/g, "") || "0"
@@ -718,24 +770,27 @@ function setupEventListeners() {
           orderQuantityInput.value = calculatedQuantity.toFixed(8);
           updateTotal();
         }
-      } else if (
+      }
+      // 시장가 모드의 총액 버튼
+      else if (
         activeTradingType === "market" &&
-        group.closest(".trading-total-group")
+        e.target.closest(".trading-total-group")
       ) {
         const totalAmount = userKRWBalance * percent;
         if (orderTotalMarketInput) {
           orderTotalMarketInput.value = totalAmount.toLocaleString("ko-KR");
         }
       }
-    });
+    }
   });
 
   // 거래 버튼
-  document.querySelectorAll(".trade-button").forEach((button) => {
-    button.addEventListener("click", () => {
-      const side = button.classList.contains("bid-button") ? "bid" : "ask";
-      sendOrder(side);
-    });
+  document.addEventListener("click", (e) => {
+    if (e.target.classList.contains("bid-button")) {
+      sendOrder("bid");
+    } else if (e.target.classList.contains("ask-button")) {
+      sendOrder("ask");
+    }
   });
 
   // 입력 필드 이벤트

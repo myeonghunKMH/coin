@@ -1,9 +1,11 @@
 <!DOCTYPE html>
+<!-- realtime.html -->
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <title>실시간 암호화폐 모의투자 (Node.js)</title>
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="css/common.css" />
+    <link rel="stylesheet" href="css/realtime.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial"></script>
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4"></script>
@@ -76,23 +78,23 @@
           </div>
 
           <div class="trading-content">
-            <!-- 거래 유형 -->
-            <div class="trading-type">
-              <button class="trading-type-btn active" data-type="limit">
-                지정가
-              </button>
-              <button class="trading-type-btn" data-type="market">
-                시장가
-              </button>
-              <button class="trading-type-btn disabled">예약</button>
-            </div>
+            <div class="balance-and-type">
+              <div class="available-balance">
+                <span>주문가능</span>
+                <span id="available-amount" class="available-amount-value"
+                  >0 KRW</span
+                >
+              </div>
 
-            <!-- 주문가능 잔액 -->
-            <div class="available-balance">
-              <span>주문가능</span>
-              <span id="available-amount" class="available-amount-value"
-                >0 KRW</span
-              >
+              <div class="trading-type">
+                <button class="trading-type-btn active" data-type="limit">
+                  지정가
+                </button>
+                <button class="trading-type-btn" data-type="market">
+                  시장가
+                </button>
+                <button class="trading-type-btn disabled">예약</button>
+              </div>
             </div>
 
             <!-- 주문가 입력 -->

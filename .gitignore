@@ -1,0 +1,10 @@
+# Node modules
+node_modules/
+
+# 로그 파일
+npm-debug.log*
+yarn-debug.log*
+
+# 기타 시스템 파일
+.DS_Store
+.env

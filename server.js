@@ -8,7 +8,7 @@ const cors = require("cors");
 const sql = require("mssql");
 const path = require("path");
 
-// 환경 변수 설정 (실제 운영에서는 .env 파일 사용 권장)
+// 환경 변수 설정
 const PORT = process.env.PORT || 3000;
 const DB_CONFIG = {
   user: process.env.DB_USER || "new_trading_user",
