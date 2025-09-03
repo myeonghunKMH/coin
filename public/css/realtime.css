@@ -609,3 +609,12 @@
 .pending-order-item .order-quantity {
   color: #8991a0;
 }
+
+.chart-container-wrapper,
+.volume-container-wrapper {
+  position: relative;
+}
+canvas {
+  width: 100% !important;
+  height: 100% !important;
+}

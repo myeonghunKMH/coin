@@ -10,6 +10,7 @@
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-crosshair"></script>
   </head>
 
   <body>
@@ -27,8 +28,14 @@
             <button class="time-tab" data-unit="1D">1일</button>
           </div>
         </div>
-        <div class="chart-container-wrapper">
+        <div class="chart-container-wrapper" style="height: 70vh">
           <canvas id="coinChart"></canvas>
+        </div>
+        <div
+          class="volume-container-wrapper"
+          style="height: 20vh; margin-top: 10px"
+        >
+          <canvas id="volumeChart"></canvas>
         </div>
       </div>
 

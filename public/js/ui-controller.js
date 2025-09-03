@@ -76,13 +76,16 @@ export class UIController {
       .map(
         (t) => `
     <div class="transaction-item">
-      <span class="tx-info">${t.market} | ${
+      <span class="tx-info">|${t.market} | ${
           t.side === "bid" ? "매수" : "매도"
         }</span>
-      <span class="tx-price">가격: ${Utils.formatKRW(t.price)}</span>
-      <span class="tx-quantity">수량: ${Utils.formatCoinAmount(
+      <span class="tx-price">체결가격: ${Utils.formatKRW(t.price)} |</span>
+      <span class="tx-quantity"> 체결수량: ${Utils.formatCoinAmount(
         t.quantity
-      )}</span>
+      )} |</span>
+      <span class="tx-total"> 체결금액: ${Utils.formatKRW(
+        t.total_amount
+      )} |</span>
     </div>
     `
       )
