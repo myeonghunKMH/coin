@@ -1,6 +1,7 @@
 # 진행도 정리
 
 🎯 현재 완전 구현된 기능
+
 📊 실시간 데이터 & 차트
 
 실시간 비트코인/이더리움/리플 시세 (업비트 WebSocket)
@@ -23,7 +24,7 @@
 대기 주문 목록 (pending orders)
 체결 내역 조회 (transaction history)
 실시간 체결 알림 (WebSocket 토스트)
-주문 상태 추적 (pending → partial → filled → cancelled)
+주문 상태 추적 (pending → partial(미구현) → filled → cancelled)
 
 💳 잔고 관리
 
@@ -41,6 +42,7 @@
 반응형 레이아웃
 
 ⚠️ 부분 구현/미구현 기능
+
 🔐 인증 시스템
 
 로그인/회원가입 (UI만 있음)
