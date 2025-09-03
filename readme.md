@@ -102,6 +102,24 @@ CREATE TABLE transactions (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 GO
+
+-- pending_orders 테이블
+CREATE TABLE pending_orders (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    user_id INT NOT NULL,
+    market NVARCHAR(20) NOT NULL,
+    side NVARCHAR(10) NOT NULL, -- 'bid' or 'ask'
+    order_type NVARCHAR(10) NOT NULL, -- 'limit' or 'market'
+    price DECIMAL(18,0) NULL, -- 지정가 (원화는 정수)
+    quantity DECIMAL(18,8) NOT NULL,
+    remaining_quantity DECIMAL(18,8) NOT NULL, -- 미체결 수량
+    total_amount DECIMAL(18,0) NOT NULL,
+    status NVARCHAR(20) DEFAULT 'pending', -- 'pending', 'partial', 'filled', 'cancelled'
+    created_at DATETIME2 DEFAULT GETDATE(),
+    updated_at DATETIME2 DEFAULT GETDATE(),
+
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
 ```
 
 ## 5️⃣ 초기 사용자 등록
