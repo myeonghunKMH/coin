@@ -1,4 +1,4 @@
-// src/services/trading-service.js
+// src/services/trading-service.js (Enhanced for Order Matching)
 const KRWUtils = require("../utils/krw-utils");
 const CONFIG = require("../config");
 
@@ -63,10 +63,17 @@ class TradingService {
         normalizedQuantity
       );
 
-    // 👇 이 부분이 핵심 수정
     if (type === "limit") {
-      console.log("지정가 주문 처리 중:", type);
-      // 지정가 주문은 대기 주문으로 처리
+      // 지정가 주문: 잔고 예약 후 대기 주문 생성
+      await this.reserveBalanceForLimitOrder(
+        userId,
+        market,
+        side,
+        finalPrice,
+        finalQuantity,
+        totalAmount
+      );
+
       return await this.db.createPendingOrder(
         userId,
         market,
@@ -77,8 +84,7 @@ class TradingService {
         type
       );
     } else {
-      console.log("시장가 주문 처리 중:", type);
-      // 시장가 주문은 즉시 체결
+      // 시장가 주문: 즉시 체결
       await this.db.executeTradeTransaction(
         userId,
         market,
@@ -99,5 +105,77 @@ class TradingService {
       };
     }
   }
+
+  /**
+   * 지정가 주문을 위한 잔고 예약 처리
+   */
+  async reserveBalanceForLimitOrder(
+    userId,
+    market,
+    side,
+    price,
+    quantity,
+    totalAmount
+  ) {
+    const sql = require("mssql");
+    const request = new sql.Request(this.db.pool);
+
+    request.input("userId", sql.Int, userId);
+
+    if (side === "bid") {
+      // 매수 주문: KRW 잔고에서 총액만큼 차감
+      const requiredAmount = KRWUtils.toInteger(totalAmount);
+
+      // 현재 잔고 확인
+      const balanceResult = await request.query(`
+        SELECT krw_balance FROM users WITH (UPDLOCK) WHERE id = @userId
+      `);
+
+      const currentBalance = KRWUtils.toInteger(
+        balanceResult.recordset[0]?.krw_balance || 0
+      );
+
+      if (currentBalance < requiredAmount) {
+        throw new Error("잔액이 부족합니다.");
+      }
+
+      const newBalance = currentBalance - requiredAmount;
+
+      await request.input("newBalance", sql.Decimal(18, 0), newBalance).query(`
+          UPDATE users SET krw_balance = @newBalance WHERE id = @userId
+        `);
+
+      console.log(
+        `💰 매수 주문 잔고 예약: ${requiredAmount.toLocaleString()}원 차감 (잔여: ${newBalance.toLocaleString()}원)`
+      );
+    } else {
+      // 매도 주문: 코인 잔고에서 수량만큼 차감
+      const coinName = market.split("-")[1].toLowerCase();
+
+      // 현재 코인 잔고 확인
+      const balanceResult = await request.query(`
+        SELECT ${coinName}_balance FROM users WITH (UPDLOCK) WHERE id = @userId
+      `);
+
+      const currentCoinBalance =
+        balanceResult.recordset[0]?.[`${coinName}_balance`] || 0;
+
+      if (currentCoinBalance < quantity) {
+        throw new Error("보유 코인이 부족합니다.");
+      }
+
+      const newCoinBalance = currentCoinBalance - quantity;
+
+      await request.input("newCoinBalance", sql.Decimal(18, 8), newCoinBalance)
+        .query(`
+          UPDATE users SET ${coinName}_balance = @newCoinBalance WHERE id = @userId
+        `);
+
+      console.log(
+        `🪙 매도 주문 잔고 예약: ${quantity}개 ${coinName.toUpperCase()} 차감 (잔여: ${newCoinBalance}개)`
+      );
+    }
+  }
 }
+
 module.exports = TradingService;

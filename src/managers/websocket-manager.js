@@ -1,14 +1,22 @@
-// src/managers/websocket-manager.js
+// src/managers/websocket-manager.js (Enhanced with Order Matching)
 const WebSocket = require("ws");
 const { v4: uuidv4 } = require("uuid");
 const CONFIG = require("../config");
 const KRWUtils = require("../utils/krw-utils");
+const OrderMatchingEngine = require("../services/order-matching-engine");
 
 class WebSocketManager {
-  constructor(clientWebSocketServer) {
+  constructor(clientWebSocketServer, dbManager) {
     this.upbitWs = null;
     this.clientWss = clientWebSocketServer;
     this.currentMarketPrices = {};
+    this.dbManager = dbManager;
+
+    // 주문 매칭 엔진 초기화
+    this.matchingEngine = new OrderMatchingEngine(dbManager);
+
+    // 호가창 데이터 저장 (체결 검사용)
+    this.latestOrderbooks = {};
   }
 
   connect() {
@@ -49,15 +57,14 @@ class WebSocketManager {
     this.upbitWs.send(JSON.stringify(requestMessage));
   }
 
-  handleMessage(event) {
+  async handleMessage(event) {
     try {
       const data = JSON.parse(event.data);
 
-      // 현재 시장가 업데이트 (정수로 저장)
       if (data.type === "ticker") {
-        this.currentMarketPrices[data.code] = KRWUtils.toInteger(
-          data.trade_price
-        );
+        this.handleTickerData(data);
+      } else if (data.type === "orderbook") {
+        await this.handleOrderbookData(data);
       }
 
       // 연결된 모든 클라이언트에게 데이터 전송
@@ -67,10 +74,53 @@ class WebSocketManager {
     }
   }
 
+  handleTickerData(data) {
+    const code = data.code;
+    if (!CONFIG.MARKET_CODES.includes(code)) return;
+
+    // 현재 시장가 업데이트 (정수로 저장)
+    this.currentMarketPrices[code] = KRWUtils.toInteger(data.trade_price);
+  }
+
+  async handleOrderbookData(data) {
+    const code = data.code;
+    if (!CONFIG.MARKET_CODES.includes(code)) return;
+
+    // 호가창 데이터 저장
+    this.latestOrderbooks[code] = data;
+
+    // 🔥 핵심: 호가창이 업데이트될 때마다 주문 매칭 검사
+    if (data.level === 0) {
+      // 일반 호가창만 처리 (grouped는 제외)
+      try {
+        await this.matchingEngine.processOrderbook(code, data);
+      } catch (error) {
+        console.error(`주문 매칭 처리 오류 (${code}):`, error);
+      }
+    }
+  }
+
   broadcastToClients(data) {
     this.clientWss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
         client.send(data);
+      }
+    });
+  }
+
+  /**
+   * 주문 체결 알림을 클라이언트에게 전송
+   */
+  broadcastOrderFillNotification(userId, orderDetails) {
+    const notification = {
+      type: "order_filled",
+      userId: userId,
+      data: orderDetails,
+    };
+
+    this.clientWss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify(notification));
       }
     });
   }

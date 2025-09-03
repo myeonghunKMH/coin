@@ -1,4 +1,4 @@
-// src/js/app.js
+// src/js/app.js (Enhanced with Order Matching System)
 const express = require("express");
 const { Server } = require("ws");
 const http = require("http");
@@ -21,7 +21,10 @@ class TradingServer {
 
     // 서비스 인스턴스들
     this.dbManager = new DatabaseManager();
-    this.wsManager = new WebSocketManager(this.wss);
+
+    // ✅ WebSocketManager에 dbManager 전달 (주문 매칭 엔진용)
+    this.wsManager = new WebSocketManager(this.wss, this.dbManager);
+
     this.tradingService = new TradingService(this.dbManager, this.wsManager);
     this.apiRouter = new APIRouter(this.dbManager, this.tradingService);
 
@@ -88,7 +91,7 @@ class TradingServer {
       // 데이터베이스 연결
       await this.dbManager.connect();
 
-      // 업비트 웹소켓 연결
+      // 업비트 웹소켓 연결 (주문 매칭 엔진 포함)
       this.wsManager.connect();
 
       // HTTP 서버 시작
@@ -98,6 +101,7 @@ class TradingServer {
         );
         console.log(`📊 지원 마켓: ${CONFIG.MARKET_CODES.join(", ")}`);
         console.log(`💰 원화 금액은 정수로 처리됩니다.`);
+        console.log(`🎯 실시간 주문 매칭 엔진이 활성화되었습니다.`);
       });
     } catch (error) {
       console.error("❌ 서버 시작 실패:", error);
@@ -126,4 +130,5 @@ class TradingServer {
     }
   }
 }
+
 module.exports = TradingServer;

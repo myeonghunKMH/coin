@@ -1,3 +1,4 @@
+// public/js/websocket-manager.js (Enhanced with Order Fill Notifications)
 import { MARKET_CODES } from "./constants.js";
 import { Utils } from "./utils.js";
 
@@ -27,22 +28,63 @@ export class WebSocketManager {
     };
 
     this.ws.onclose = () => {
-      console.log("웹소켓 연결 종료");
+      console.log("웹소켓 연결 종료 - 재연결 시도 중...");
+      setTimeout(() => this.connect(), 3000);
+    };
+
+    this.ws.onopen = () => {
+      console.log("✅ 웹소켓 연결 성공");
     };
   }
 
   handleMessage(data) {
     try {
-      const upbitData = JSON.parse(data);
+      const message = JSON.parse(data);
 
-      if (upbitData.type === "ticker") {
-        this.handleTickerData(upbitData);
-      } else if (upbitData.type === "orderbook") {
-        this.handleOrderbookData(upbitData);
+      // 🔥 주문 체결 알림 처리
+      if (message.type === "order_filled") {
+        this.handleOrderFillNotification(message.data);
+        return;
+      }
+
+      // 기존 업비트 데이터 처리
+      if (message.type === "ticker") {
+        this.handleTickerData(message);
+      } else if (message.type === "orderbook") {
+        this.handleOrderbookData(message);
       }
     } catch (error) {
       console.error("웹소켓 메시지 파싱 오류:", error);
     }
+  }
+
+  /**
+   * 주문 체결 알림 처리
+   */
+  async handleOrderFillNotification(orderData) {
+    console.log("🎯 주문 체결 알림 수신:", orderData);
+
+    // 성공 토스트 메시지 표시
+    const message = `${orderData.market} ${
+      orderData.side === "bid" ? "매수" : "매도"
+    } 주문이 체결되었습니다! (가격: ${Utils.formatKRW(
+      orderData.executionPrice
+    )})`;
+
+    if (this.ui?.dom?.showOrderResult) {
+      this.ui.dom.showOrderResult(message, true);
+    }
+
+    // 관련 데이터 새로고침
+    setTimeout(async () => {
+      await this.trading.fetchUserBalance();
+      const pendingOrders = await this.trading.fetchPendingOrders();
+      const filledOrders = await this.trading.fetchFilledOrders();
+
+      this.ui.updatePendingOrdersList(pendingOrders);
+      this.ui.updateFilledOrdersList(filledOrders);
+      this.ui.updateTradingPanel();
+    }, 500);
   }
 
   handleTickerData(data) {
@@ -65,17 +107,15 @@ export class WebSocketManager {
 
     if (code === this.state.activeCoin) {
       this.ui.updateCoinSummary();
-
-      // ❌ 주문가 자동 업데이트 제거 - 사용자가 입력한 값 유지
-      // this.ui.updateTradingPanel(); // 이것도 제거하여 불필요한 업데이트 방지
     }
 
-    // 가격이 변경되었을 때 대기 주문 새로고침 (체결되었을 수 있음)
+    // 가격 변동시 UI 업데이트 (체결된 주문이 있을 수 있음)
     if (previousPrice !== currentPrice) {
-      setTimeout(() => {
-        this.trading.fetchPendingOrders();
-        this.trading.fetchUserBalance();
-      }, 500);
+      setTimeout(async () => {
+        await this.trading.fetchUserBalance();
+        const pendingOrders = await this.trading.fetchPendingOrders();
+        this.ui.updatePendingOrdersList(pendingOrders);
+      }, 1000);
     }
   }
 
