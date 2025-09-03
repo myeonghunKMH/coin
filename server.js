@@ -190,6 +190,71 @@ class DatabaseManager {
     return result.recordset;
   }
 
+  async getUserPendingOrders(userId) {
+    const request = new sql.Request(this.pool);
+    request.input("userId", sql.Int, userId);
+
+    const result = await request.query(`
+  SELECT id, market, side, order_type, price, quantity, remaining_quantity, 
+         total_amount, status, created_at
+  FROM pending_orders 
+  WHERE user_id = @userId AND status = 'pending'
+  ORDER BY created_at DESC
+`);
+
+    return result.recordset;
+  }
+
+  async createPendingOrder(
+    userId,
+    market,
+    side,
+    price,
+    quantity,
+    totalAmount,
+    type
+  ) {
+    const request = new sql.Request(this.pool);
+    const result = await request
+      .input("userId", sql.Int, userId)
+      .input("market", sql.VarChar(20), market)
+      .input("side", sql.NVarChar, side)
+      .input("orderType", sql.NVarChar, type)
+      .input("price", sql.Decimal(18, 0), KRWUtils.toInteger(price))
+      .input("quantity", sql.Decimal(18, 8), quantity)
+      .input("remainingQuantity", sql.Decimal(18, 8), quantity)
+      .input("totalAmount", sql.Decimal(18, 0), KRWUtils.toInteger(totalAmount))
+      .query(`
+      INSERT INTO pending_orders 
+      (user_id, market, side, order_type, price, quantity, remaining_quantity, total_amount)
+      OUTPUT INSERTED.id
+      VALUES (@userId, @market, @side, @orderType, @price, @quantity, @remainingQuantity, @totalAmount)
+    `);
+
+    return {
+      orderId: result.recordset[0].id,
+      status: "pending",
+      message: "지정가 주문이 등록되었습니다.",
+    };
+  }
+
+  async cancelPendingOrder(userId, orderId) {
+    const request = new sql.Request(this.pool);
+    const result = await request
+      .input("userId", sql.Int, userId)
+      .input("orderId", sql.Int, orderId).query(`
+      UPDATE pending_orders 
+      SET status = 'cancelled', updated_at = GETDATE()
+      WHERE id = @orderId AND user_id = @userId AND status = 'pending'
+    `);
+
+    if (result.rowsAffected[0] === 0) {
+      throw new Error("취소할 수 있는 주문을 찾을 수 없습니다.");
+    }
+
+    return { message: "주문이 성공적으로 취소되었습니다." };
+  }
+
   async executeTradeTransaction(
     userId,
     market,
@@ -463,13 +528,11 @@ class TradingService {
   }
 
   async executeOrder(market, side, type, normalizedPrice, normalizedQuantity) {
-    // 사용자 ID 조회
     const userId = await this.db.getUserById(CONFIG.DEFAULT_USER);
     if (!userId) {
       throw new Error("사용자를 찾을 수 없습니다.");
     }
 
-    // 거래 금액 계산
     const { finalPrice, finalQuantity, totalAmount } =
       this.calculateTradeAmounts(
         market,
@@ -479,29 +542,41 @@ class TradingService {
         normalizedQuantity
       );
 
-    // 거래 실행
-    await this.db.executeTradeTransaction(
-      userId,
-      market,
-      side,
-      finalPrice,
-      finalQuantity,
-      totalAmount,
-      type
-    );
+    // 👇 이 부분이 핵심 수정
+    if (type === "limit") {
+      console.log("지정가 주문 처리 중:", type);
+      // 지정가 주문은 대기 주문으로 처리
+      return await this.db.createPendingOrder(
+        userId,
+        market,
+        side,
+        finalPrice,
+        finalQuantity,
+        totalAmount,
+        type
+      );
+    } else {
+      console.log("시장가 주문 처리 중:", type);
+      // 시장가 주문은 즉시 체결
+      await this.db.executeTradeTransaction(
+        userId,
+        market,
+        side,
+        finalPrice,
+        finalQuantity,
+        totalAmount,
+        type
+      );
 
-    console.log(
-      `✅ 주문 성공: ${market} ${side} ${type} - 가격: ${finalPrice.toLocaleString()}, 수량: ${finalQuantity}, 총액: ${totalAmount.toLocaleString()}`
-    );
-
-    return {
-      market,
-      side,
-      type,
-      price: KRWUtils.toInteger(finalPrice),
-      quantity: finalQuantity,
-      totalAmount: KRWUtils.toInteger(totalAmount),
-    };
+      return {
+        market,
+        side,
+        type,
+        price: KRWUtils.toInteger(finalPrice),
+        quantity: finalQuantity,
+        totalAmount: KRWUtils.toInteger(totalAmount),
+      };
+    }
   }
 }
 
@@ -521,6 +596,11 @@ class APIRouter {
     this.router.post("/trade", this.postTrade.bind(this));
     this.router.get("/candles", this.getCandles.bind(this));
     this.router.get("/transactions", this.getTransactions.bind(this));
+    this.router.get("/pending-orders", this.getPendingOrders.bind(this));
+    this.router.delete(
+      "/pending-orders/:orderId",
+      this.cancelPendingOrder.bind(this)
+    );
   }
 
   async getBalance(req, res) {
@@ -640,8 +720,9 @@ class APIRouter {
         limit,
         offset
       );
-      const processedTransactions = transactions.map(
-        KRWUtils.processTransaction
+      // ✅ 화살표 함수를 사용하여 'this' 컨텍스트를 유지합니다.
+      const processedTransactions = transactions.map((t) =>
+        KRWUtils.processTransaction(t)
       );
 
       res.json(processedTransactions);
@@ -650,6 +731,58 @@ class APIRouter {
       res.status(500).json({
         error: "거래 내역 조회에 실패했습니다.",
         code: "TRANSACTION_HISTORY_ERROR",
+      });
+    }
+  }
+  async getPendingOrders(req, res) {
+    try {
+      const userId = await this.db.getUserById(CONFIG.DEFAULT_USER);
+      if (!userId) {
+        return res.status(404).json({
+          error: "사용자를 찾을 수 없습니다.",
+          code: "USER_NOT_FOUND",
+        });
+      }
+
+      const orders = await this.db.getUserPendingOrders(userId);
+      res.json(orders);
+    } catch (error) {
+      console.error("대기 주문 조회 오류:", error);
+      res.status(500).json({
+        error: "대기 주문 조회에 실패했습니다.",
+        code: "PENDING_ORDERS_ERROR",
+      });
+    }
+  }
+  async cancelPendingOrder(req, res) {
+    try {
+      const { orderId } = req.params;
+
+      if (!orderId || isNaN(orderId)) {
+        return res.status(400).json({
+          error: "유효한 주문 ID가 필요합니다.",
+          code: "INVALID_ORDER_ID",
+        });
+      }
+
+      const userId = await this.db.getUserById(CONFIG.DEFAULT_USER);
+      if (!userId) {
+        return res.status(404).json({
+          error: "사용자를 찾을 수 없습니다.",
+          code: "USER_NOT_FOUND",
+        });
+      }
+
+      const result = await this.db.cancelPendingOrder(
+        userId,
+        parseInt(orderId)
+      );
+      res.json(result);
+    } catch (error) {
+      console.error("주문 취소 오류:", error);
+      res.status(500).json({
+        error: error.message || "주문 취소에 실패했습니다.",
+        code: "CANCEL_ORDER_ERROR",
       });
     }
   }

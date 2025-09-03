@@ -1,0 +1,117 @@
+// crypto-trading-app.js
+import { TradingState } from "./trading-state.js";
+import { DOMManager } from "./dom-manager.js";
+import { UIController } from "./ui-controller.js";
+import { ChartManager } from "./chart-manager.js";
+import { TradingManager } from "./trading-manager.js";
+import { EventManager } from "./event-manager.js";
+import { WebSocketManager } from "./websocket-manager.js";
+
+export class CryptoTradingApp {
+  constructor() {
+    this.state = new TradingState();
+    this.domManager = new DOMManager();
+
+    this.tradingManager = new TradingManager(this.state, this.domManager);
+    this.uiController = new UIController(this.state, this.domManager);
+
+    this.chartManager = new ChartManager(this.state);
+    this.eventManager = new EventManager(
+      this.state,
+      this.domManager,
+      this.uiController,
+      this.tradingManager,
+      this.chartManager
+    );
+    this.webSocketManager = new WebSocketManager(
+      this.state,
+      this.uiController,
+      this.tradingManager
+    );
+  }
+
+  async initialize() {
+    try {
+      this.uiController.updateCoinTabs();
+      this.uiController.updateCoinSummary();
+      this.uiController.updateTradingPanel();
+
+      await this.chartManager.fetchAndRender();
+
+      this.uiController.updateOrderbook(
+        this.state.latestOrderbookData[this.state.activeCoin].general,
+        this.domManager.elements.generalAskList,
+        this.domManager.elements.generalBidList
+      );
+
+      await this.tradingManager.fetchUserBalance();
+
+      const pendingOrders = await this.tradingManager.fetchPendingOrders();
+      this.uiController.updatePendingOrdersList(pendingOrders);
+
+      const filledOrders = await this.tradingManager.fetchFilledOrders();
+      this.uiController.updateFilledOrdersList(filledOrders);
+
+      this.eventManager.setupAllEventListeners();
+      this.webSocketManager.connect();
+      this.startPeriodicUpdates();
+
+      // WebSocket 연결 후 초기 가격 설정을 위해 잠시 대기
+      setTimeout(() => {
+        const currentPrice =
+          this.state.latestTickerData[this.state.activeCoin]?.trade_price || 0;
+        if (currentPrice > 0) {
+          this.domManager.setOrderPrice(currentPrice);
+        }
+      }, 1000);
+
+      console.log("✅ 암호화폐 거래 시스템 초기화 완료");
+    } catch (error) {
+      console.error("초기화 중 오류 발생:", error);
+      alert("시스템 초기화 중 오류가 발생했습니다. 페이지를 새로고침해주세요.");
+    }
+  }
+
+  startPeriodicUpdates() {
+    setInterval(() => {
+      this.chartManager.checkAutoUpdate();
+    }, 5000);
+
+    setInterval(async () => {
+      await this.tradingManager.fetchUserBalance();
+
+      const pendingOrders = await this.tradingManager.fetchPendingOrders();
+      this.uiController.updatePendingOrdersList(pendingOrders);
+    }, 10000);
+  }
+
+  handleError(error, context = "알 수 없는 오류") {
+    console.error(`${context}:`, error);
+
+    const errorMessages = {
+      network: "네트워크 연결을 확인해주세요.",
+      websocket: "실시간 데이터 연결에 문제가 있습니다.",
+      api: "서버와의 통신에 문제가 있습니다.",
+      chart: "차트 로딩 중 문제가 발생했습니다.",
+      trading: "거래 처리 중 문제가 발생했습니다.",
+    };
+
+    const message =
+      errorMessages.api ||
+      "일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요.";
+
+    if (!error.message?.includes("WebSocket")) {
+      console.warn("사용자 알림:", message);
+    }
+  }
+
+  cleanup() {
+    if (this.webSocketManager.ws) {
+      this.webSocketManager.ws.close();
+    }
+
+    if (this.state.mainChart) {
+      this.state.mainChart.destroy();
+    }
+  }
+}
