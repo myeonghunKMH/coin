@@ -3,8 +3,7 @@ import { COIN_NAMES } from "./constants.js";
 export class ChartManager {
   constructor(state) {
     this.state = state;
-    this.mainChart = null;
-    this.volumeChart = null;
+    this.chart = null;
   }
 
   async fetchAndRender() {
@@ -28,18 +27,18 @@ export class ChartManager {
         color: d.trade_price >= d.opening_price ? "#1261C4" : "#C84A31",
       }));
       const unitForChart = this.getChartTimeUnit();
-      this.renderCandleChart(chartData, volumeData, unitForChart);
-      this.renderVolumeChart(volumeData, unitForChart);
+
+      this.renderCombinedChart(chartData, volumeData, unitForChart);
     } catch (error) {
       console.error("차트 데이터 로딩 오류:", error);
     }
   }
 
-  renderCandleChart(chartData, volumeData, unitForChart) {
-    if (this.mainChart) {
-      this.mainChart.destroy();
+  renderCombinedChart(chartData, volumeData, unitForChart) {
+    if (this.chart) {
+      this.chart.destroy();
     }
-    // Calculate Moving Averages
+
     const ma5Data = this.calculateMA(chartData, 5).map((y, i) => ({
       x: chartData[i]?.x,
       y,
@@ -48,17 +47,20 @@ export class ChartManager {
       x: chartData[i]?.x,
       y,
     }));
-    const ctx = document.getElementById("coinChart")?.getContext("2d");
+
+    const volumeBackgroundColors = volumeData.map((d) => d.color);
+
+    const ctx = document.getElementById("combinedChart")?.getContext("2d");
     if (ctx) {
-      this.mainChart = new Chart(ctx, {
-        type: "candlestick",
+      this.chart = new Chart(ctx, {
+        type: "line",
         data: {
           datasets: [
             {
-              label: `${COIN_NAMES[this.state.activeCoin]} ${
-                this.state.activeUnit
-              } 캔들`,
+              type: "candlestick",
+              label: `${COIN_NAMES[this.state.activeCoin]} 캔들`,
               data: chartData,
+              yAxisID: "yPrice",
               color: {
                 up: "#1261C4",
                 down: "#C84A31",
@@ -74,25 +76,34 @@ export class ChartManager {
               type: "line",
               label: "MA5",
               data: ma5Data,
+              yAxisID: "yPrice",
               borderColor: "#FF0000",
               borderWidth: 1,
               fill: false,
               pointRadius: 0,
-              tension: 0,
+              tension: 0.1,
             },
             {
               type: "line",
               label: "MA20",
               data: ma20Data,
+              yAxisID: "yPrice",
               borderColor: "#00FF00",
               borderWidth: 1,
               fill: false,
               pointRadius: 0,
-              tension: 0,
+              tension: 0.1,
+            },
+            {
+              type: "bar",
+              label: "거래량",
+              data: volumeData.map((d) => ({ x: d.x, y: d.y })),
+              yAxisID: "yVolume",
+              backgroundColor: volumeBackgroundColors,
             },
           ],
         },
-        options: this.getCandleOptions(volumeData, unitForChart),
+        options: this.getCombinedChartOptions(unitForChart),
       });
     }
   }
@@ -113,34 +124,12 @@ export class ChartManager {
     return ma;
   }
 
-  renderVolumeChart(volumeData, unitForChart) {
-    if (this.volumeChart) {
-      this.volumeChart.destroy();
-    }
-    const ctx = document.getElementById("volumeChart")?.getContext("2d");
-    if (ctx) {
-      this.volumeChart = new Chart(ctx, {
-        type: "bar",
-        data: {
-          datasets: [
-            {
-              label: "거래량",
-              data: volumeData.map((d) => ({ x: d.x, y: d.y })),
-              backgroundColor: volumeData.map((d) => d.color),
-            },
-          ],
-        },
-        options: this.getVolumeOptions(unitForChart),
-      });
-    }
-  }
-
   getChartTimeUnit() {
     if (this.state.activeUnit === "1D") return "day";
     return parseInt(this.state.activeUnit) >= 60 ? "hour" : "minute";
   }
 
-  getCandleOptions(volumeData, unitForChart) {
+  getCombinedChartOptions(unitForChart) {
     return {
       responsive: true,
       maintainAspectRatio: false,
@@ -171,9 +160,11 @@ export class ChartManager {
             },
             label: (context) => {
               const d = context.raw;
-              const volumeItem = volumeData.find((v) => v.x === d.x);
-              const volume = volumeItem ? volumeItem.y : 0;
               if (context.dataset.type === "candlestick") {
+                const volumeDataPoint = this.chart.data.datasets
+                  .find((ds) => ds.type === "bar")
+                  ?.data.find((vd) => vd.x === d.x);
+                const volume = volumeDataPoint ? volumeDataPoint.y : 0;
                 return [
                   `시가: ${d.o.toLocaleString()}`,
                   `고가: ${d.h.toLocaleString()}`,
@@ -181,6 +172,12 @@ export class ChartManager {
                   `종가: ${d.c.toLocaleString()}`,
                   `거래량: ${volume.toLocaleString()}`,
                 ];
+              }
+              if (context.dataset.type === "line") {
+                return `${context.dataset.label}: ${d.y.toLocaleString()}`;
+              }
+              if (context.dataset.type === "bar") {
+                return `${context.dataset.label}: ${d.y.toLocaleString()}`;
               }
               return context.formattedValue;
             },
@@ -206,92 +203,92 @@ export class ChartManager {
           type: "time",
           time: {
             unit: unitForChart,
+            // 🔧 날짜 포맷 수정
             displayFormats: {
-              minute: "H:mm",
-              hour: "M/D H:00",
-              day: "M/D",
+              minute: "HH:mm", // 09:30
+              hour: "MM/DD HH:mm", // 09/04 15:30
+              day: "MM/DD", // 09/04
             },
             tooltipFormat: "YYYY-MM-DD HH:mm",
           },
           grid: { color: "rgba(255, 255, 255, 0.1)" },
           ticks: {
             color: "white",
-            maxTicksLimit: 10,
+            maxTicksLimit: 8,
+            source: "auto",
+            autoSkip: true,
+            autoSkipPadding: 50,
+            // 🔧 커스텀 날짜 포맷 함수 추가
+            callback: function (value, index, ticks) {
+              const date = new Date(value);
+
+              if (unitForChart === "minute") {
+                return date.toLocaleTimeString("ko-KR", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: false,
+                });
+              } else if (unitForChart === "hour") {
+                return `${
+                  date.getMonth() + 1
+                }/${date.getDate()} ${date.getHours()}:00`;
+              } else if (unitForChart === "day") {
+                return `${date.getMonth() + 1}/${date.getDate()}`;
+              }
+
+              return date.toLocaleDateString("ko-KR", {
+                month: "numeric",
+                day: "numeric",
+              });
+            },
           },
           title: { display: false },
         },
-        y: {
+        yPrice: {
+          id: "yPrice",
           position: "right",
           grid: { color: "rgba(255, 255, 255, 0.1)" },
-          ticks: { color: "white" },
-          title: { display: false },
-        },
-      },
-      layout: {
-        padding: {
-          bottom: 0,
-        },
-      },
-    };
-  }
-
-  getVolumeOptions(unitForChart) {
-    return {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          enabled: false, // Volume chart tooltips are hidden (handled by candlestick chart)
-        },
-        crosshair: {
-          line: {
-            color: "#6A7985",
-            width: 1,
-            dashPattern: [5, 5],
-          },
-          sync: {
-            enabled: true,
-            group: 1,
-          },
-          zoom: {
-            enabled: false,
-          },
-        },
-      },
-      scales: {
-        x: {
-          type: "time",
-          time: {
-            unit: unitForChart,
-            displayFormats: {
-              minute: "H:mm",
-              hour: "M/D H:00",
-              day: "M/D",
-            },
-            tooltipFormat: "YYYY-MM-DD HH:mm",
-          },
-          grid: { color: "rgba(255, 255, 255, 0.1)" },
           ticks: {
             color: "white",
-            maxTicksLimit: 10,
-            display: false,
+            callback: function (value) {
+              return value.toLocaleString();
+            },
           },
           title: { display: false },
+          stack: "combined",
+          stackWeight: 3,
         },
-        y: {
+        yVolume: {
+          id: "yVolume",
           position: "right",
           grid: { display: false },
-          ticks: { color: "white", maxTicksLimit: 5 },
+          ticks: {
+            color: "white",
+            maxTicksLimit: 3, // 볼륨축은 3개만
+            callback: function (value) {
+              // 🔧 볼륨 단위 간소화 (K, M 표시)
+              if (value >= 1000000) {
+                return (value / 1000000).toFixed(1) + "M";
+              } else if (value >= 1000) {
+                return (value / 1000).toFixed(1) + "K";
+              }
+              return value.toLocaleString();
+            },
+          },
           title: { display: false },
+          stack: "combined",
+          stackWeight: 1,
         },
       },
       layout: {
         padding: {
-          top: 0,
+          bottom: 10,
+          top: 10,
+          left: 10,
+          right: 10,
         },
       },
+      parsing: false,
     };
   }
 
