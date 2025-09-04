@@ -519,6 +519,11 @@ export class UIController {
       );
     }
 
+    // 🔧 코인 전환 시 차트 다시 렌더링 (추가된 코드)
+    if (this.chart) {
+      this.chart.fetchAndRender();
+    }
+
     // 🔧 코인 전환 시 현재가로 가격 설정 (호가 단위 적용)
     if (this.state.activeTradingType === "limit") {
       const currentPrice = this.state.latestTickerData[code]?.trade_price || 0;
