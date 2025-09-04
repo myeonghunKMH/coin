@@ -1,4 +1,4 @@
-// DOMManager.js
+// DOMManager.js - 주문총액 입력 지원 버전
 
 import { Utils } from "./utils.js";
 
@@ -13,13 +13,12 @@ export class DOMManager {
       filledOrdersTab: document.getElementById("filled-orders-tab"),
       pendingOrdersSection: document.getElementById("pending-orders-section"),
       filledOrdersSection: document.getElementById("filled-orders-section"),
-      refreshPendingOrders: document.getElementById("refresh-pending-orders"),
-      refreshFilledOrders: document.getElementById("refresh-filled-orders"),
+      refreshAllOrders: document.getElementById("refresh-all-orders"), // 🔄 전체 새로고침만 유지
 
       availableAmount: document.getElementById("available-amount"),
       orderPrice: document.getElementById("order-price"),
       orderQuantity: document.getElementById("order-quantity"),
-      orderTotal: document.getElementById("order-total"),
+      orderTotal: document.getElementById("order-total"), // 🔧 이제 입력 가능
       orderTotalMarket: document.getElementById("order-total-market"),
       pricePercentageDropdown: document.getElementById(
         "price-percentage-dropdown"
@@ -28,6 +27,7 @@ export class DOMManager {
       // 이벤트 리스너용 추가
       orderPriceInput: document.getElementById("order-price"),
       orderQuantityInput: document.getElementById("order-quantity"),
+      orderTotalInput: document.getElementById("order-total"), // 🔧 추가
       orderTotalMarketInput: document.getElementById("order-total-market"),
 
       coinTabs: document.getElementById("coin-tabs"),
@@ -56,6 +56,7 @@ export class DOMManager {
       ),
       priceBtns: document.querySelectorAll(".price-btn"),
       quantityBtns: document.querySelectorAll(".quantity-btns button"),
+      // totalBtns 제거 - 더 이상 사용하지 않음
     };
   }
 
@@ -85,38 +86,78 @@ export class DOMManager {
     }
   }
 
+  // 🔧 주문총액 설정 함수 추가
+  setOrderTotal(total) {
+    if (this.elements.orderTotal) {
+      this.elements.orderTotal.value = Utils.formatKRW(total);
+    }
+  }
+
   setOrderTotalMarket(total) {
     if (this.elements.orderTotalMarket) {
       this.elements.orderTotalMarket.value = Utils.formatKRW(total);
     }
   }
 
-  showOrderResult(message, isSuccess = true) {
+  // 🔧 개선된 주문 결과 표시 (체결 타입별 다른 스타일)
+  showOrderResult(message, isSuccess = true, orderType = null) {
     const toast = document.createElement("div");
+
+    let backgroundColor, borderColor;
+    if (isSuccess) {
+      if (orderType === "fill") {
+        backgroundColor = "linear-gradient(135deg, #00C851, #00ff88)";
+        borderColor = "#00C851";
+      } else {
+        backgroundColor = "#00C851";
+        borderColor = "#00C851";
+      }
+    } else {
+      backgroundColor = "#C84A31";
+      borderColor = "#C84A31";
+    }
+
     toast.style.cssText = `
       position: fixed;
       top: 20px;
       right: 20px;
-      background: ${isSuccess ? "#00C851" : "#C84A31"};
+      background: ${backgroundColor};
       color: white;
       padding: 12px 16px;
       border-radius: 6px;
+      border-left: 4px solid ${borderColor};
       font-size: 13px;
       font-weight: 500;
       z-index: 10000;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
       opacity: 0;
       transition: opacity 0.3s ease;
+      max-width: 300px;
+      word-wrap: break-word;
     `;
-    toast.textContent = message;
+
+    // 메시지에 줄바꿈이 있으면 처리
+    const lines = message.split("\n");
+    if (lines.length > 1) {
+      toast.innerHTML = lines.map((line) => `<div>${line}</div>`).join("");
+    } else {
+      toast.textContent = message;
+    }
 
     document.body.appendChild(toast);
 
     setTimeout(() => (toast.style.opacity = "1"), 10);
 
-    setTimeout(() => {
-      toast.style.opacity = "0";
-      setTimeout(() => document.body.removeChild(toast), 300);
-    }, 3000);
+    setTimeout(
+      () => {
+        toast.style.opacity = "0";
+        setTimeout(() => {
+          if (document.body.contains(toast)) {
+            document.body.removeChild(toast);
+          }
+        }, 300);
+      },
+      isSuccess ? 3000 : 4000
+    ); // 에러는 4초간 표시
   }
 }

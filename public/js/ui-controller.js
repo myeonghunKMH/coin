@@ -5,7 +5,15 @@ export class UIController {
   constructor(state, domManager) {
     this.state = state;
     this.dom = domManager;
+    this.chart = null; // 🔧 ChartManager 참조 추가
+    this.trading = null; // 🔧 TradingManager 참조 추가
     this.setupInitialData();
+  }
+
+  // 🔧 매니저 인스턴스 설정 메서드
+  setManagers(chartManager, tradingManager) {
+    this.chart = chartManager;
+    this.trading = tradingManager;
   }
 
   async setupInitialData() {
@@ -42,21 +50,68 @@ export class UIController {
       .map((order) => {
         const coinSymbol = order.market ? order.market.split("-")[1] : "";
         const sideText = order.side === "bid" ? "매수" : "매도";
+        const sideClass = order.side === "bid" ? "positive" : "negative";
         const priceText = `${Utils.formatKRW(order.price)}원`;
         const quantityText = `${Utils.formatCoinAmount(order.quantity, 4)}개`;
+
+        const remainingQuantity = order.remaining_quantity || order.quantity;
+        const isPartialFilled = remainingQuantity < order.quantity;
+        const remainingText = isPartialFilled
+          ? `(잔여: ${Utils.formatCoinAmount(remainingQuantity, 4)}개)`
+          : "";
+
+        const statusBadge = isPartialFilled
+          ? '<span class="status-badge partial">부분체결</span>'
+          : "";
+
         const totalAmount = order.price * order.quantity;
-        const totalText = `(총 ${Utils.formatKRW(totalAmount)}원)`;
+        const totalText = `총 ${Utils.formatKRW(totalAmount)}원`;
+
+        const progressPercent = isPartialFilled
+          ? (
+              ((order.quantity - remainingQuantity) / order.quantity) *
+              100
+            ).toFixed(1)
+          : 0;
 
         return `
-    <div class="order-item">
-      <div class="order-info">
-        <span class="order-text">${coinSymbol} ${sideText} ${priceText} ${quantityText} ${totalText}</span>
-      </div>
-      <button class="cancel-btn" data-order-id="${
-        order.id || order.orderId
-      }">취소</button>
-    </div>
-    `;
+          <div class="pending-order-item ${
+            isPartialFilled ? "partial-filled" : ""
+          }">
+            <div class="order-header">
+              <div class="order-main-info">
+                <span class="order-side ${sideClass}">${sideText}</span>
+                <span class="coin-name">${coinSymbol}</span>
+                ${statusBadge}
+              </div>
+              <button class="cancel-btn" data-order-id="${
+                order.id || order.orderId
+              }">취소</button>
+            </div>
+            <div class="order-details">
+              <div class="order-info">
+                <span class="order-price">${priceText}</span>
+                <span class="order-quantity">${quantityText} ${remainingText}</span>
+              </div>
+              <div class="order-total">${totalText}</div>
+            </div>
+            ${
+              isPartialFilled
+                ? `
+              <div class="order-progress">
+                <div class="progress-bar">
+                  <div class="progress-fill" style="width: ${progressPercent}%"></div>
+                </div>
+                <span class="progress-text">${progressPercent}% 체결</span>
+              </div>
+            `
+                : ""
+            }
+            <div class="order-time">${Utils.formatDateTime(
+              order.created_at
+            )}</div>
+          </div>
+        `;
       })
       .join("");
 
@@ -73,22 +128,36 @@ export class UIController {
     }
 
     const transactionItemsHTML = transactions
-      .map(
-        (t) => `
-    <div class="transaction-item">
-      <span class="tx-info">|${t.market} | ${
-          t.side === "bid" ? "매수" : "매도"
-        }</span>
-      <span class="tx-price">체결가격: ${Utils.formatKRW(t.price)} |</span>
-      <span class="tx-quantity"> 체결수량: ${Utils.formatCoinAmount(
-        t.quantity
-      )} |</span>
-      <span class="tx-total"> 체결금액: ${Utils.formatKRW(
-        t.total_amount
-      )} |</span>
-    </div>
-    `
-      )
+      .map((t) => {
+        const coinSymbol = t.market ? t.market.split("-")[1] : "";
+        const sideText = t.side === "bid" ? "매수" : "매도";
+        const sideClass = t.side === "bid" ? "positive" : "negative";
+
+        return `
+          <div class="transaction-item">
+            <div class="transaction-header">
+              <span class="tx-side ${sideClass}">${sideText}</span>
+              <span class="tx-coin">${coinSymbol}</span>
+              <span class="tx-type">${
+                t.type === "market" ? "시장가" : "지정가"
+              }</span>
+            </div>
+            <div class="transaction-details">
+              <span class="tx-price">체결가: ${Utils.formatKRW(
+                t.price
+              )}원</span>
+              <span class="tx-quantity">수량: ${Utils.formatCoinAmount(
+                t.quantity,
+                4
+              )}개</span>
+              <span class="tx-total">금액: ${Utils.formatKRW(
+                t.total_amount
+              )}원</span>
+            </div>
+            <div class="tx-time">${Utils.formatDateTime(t.created_at)}</div>
+          </div>
+        `;
+      })
       .join("");
 
     listElement.innerHTML = transactionItemsHTML;
@@ -191,9 +260,22 @@ export class UIController {
           4
         )}</span>
       `;
+
       div.onclick = () => {
         if (this.state.activeTradingType === "limit") {
-          this.dom.setOrderPrice(unit.ask_price);
+          // 매수 시에는 매도호가 클릭 시 해당 가격으로 설정
+          if (this.state.activeTradingSide === "bid") {
+            this.dom.setOrderPrice(unit.ask_price);
+            this.updateOrderTotal();
+
+            // 시각적 피드백
+            div.style.backgroundColor = "#444";
+            div.style.transform = "scale(1.02)";
+            setTimeout(() => {
+              div.style.backgroundColor = "";
+              div.style.transform = "";
+            }, 200);
+          }
         }
       };
       askListElement.appendChild(div);
@@ -211,15 +293,29 @@ export class UIController {
           4
         )}</span>
       `;
+
       div.onclick = () => {
         if (this.state.activeTradingType === "limit") {
-          this.dom.setOrderPrice(unit.bid_price);
+          // 매도 시에는 매수호가 클릭 시 해당 가격으로 설정
+          if (this.state.activeTradingSide === "ask") {
+            this.dom.setOrderPrice(unit.bid_price);
+            this.updateOrderTotal();
+
+            // 시각적 피드백
+            div.style.backgroundColor = "#444";
+            div.style.transform = "scale(1.02)";
+            setTimeout(() => {
+              div.style.backgroundColor = "";
+              div.style.transform = "";
+            }, 200);
+          }
         }
       };
       bidListElement.appendChild(div);
     });
   }
 
+  // 🔧 거래 타입/사이드 변경 시 현재가 설정 개선
   updateTradingPanel() {
     const coinCode = this.state.activeCoin;
     const coinName = coinCode.split("-")[1];
@@ -245,43 +341,74 @@ export class UIController {
 
     this.updateTradingInputs();
     this.createPercentageDropdown();
-    // 가격 자동 설정 제거
-  }
 
-  updateTradingInputs() {
-    const priceGroup = document.querySelector(".price-input-group");
-    const quantityGroup = document.querySelector(".quantity-input-group");
-    const limitTotalGroup = document.querySelector(
-      ".trading-total-group:not(.hidden)"
-    );
-    const marketTotalGroup = document.querySelector(
-      ".trading-total-group.hidden"
-    );
-
-    [priceGroup, quantityGroup, limitTotalGroup, marketTotalGroup].forEach(
-      (element) => {
-        if (element) element.style.display = "none";
-      }
-    );
-
+    // 🔧 지정가로 전환될 때 현재가 자동 설정
     if (this.state.activeTradingType === "limit") {
-      [priceGroup, quantityGroup, limitTotalGroup].forEach((element) => {
-        if (element) element.style.display = "flex";
-      });
+      const currentPrice =
+        this.state.latestTickerData[this.state.activeCoin]?.trade_price || 0;
+      if (currentPrice > 0) {
+        const adjustedPrice = Utils.adjustPriceToStep(
+          currentPrice,
+          this.state.activeCoin
+        );
+        this.dom.setOrderPrice(adjustedPrice);
 
-      if (this.dom.elements.orderPrice) {
-        this.dom.elements.orderPrice.disabled = false;
-        // 가격 자동 설정 제거 - 사용자가 직접 설정하도록
-      }
-    } else if (this.state.activeTradingType === "market") {
-      if (this.state.activeTradingSide === "bid") {
-        if (marketTotalGroup) marketTotalGroup.style.display = "flex";
-      } else {
-        if (quantityGroup) quantityGroup.style.display = "flex";
+        // 🔧 가격 설정 후 기존 수량이나 총액이 있으면 재계산
+        const existingQuantity =
+          Utils.parseNumber(this.dom.elements.orderQuantity?.value) || 0;
+        const existingTotal =
+          Utils.parseNumber(this.dom.elements.orderTotal?.value) || 0;
+
+        if (existingQuantity > 0) {
+          this.updateOrderTotal();
+        } else if (existingTotal > 0) {
+          this.updateQuantityFromTotal();
+        }
       }
     }
   }
 
+  // 🔧 개선된 거래 입력 필드 표시
+  updateTradingInputs() {
+    const priceGroup = document.querySelector(".price-input-group");
+    const quantityGroup = document.querySelector(".quantity-input-group");
+    const totalGroup = document.querySelector(".total-input-group");
+    const marketTotalGroup = document.querySelector(".market-total-group");
+
+    // 모든 그룹 숨기기
+    [priceGroup, quantityGroup, totalGroup, marketTotalGroup].forEach(
+      (element) => {
+        if (element) element.classList.add("hidden");
+      }
+    );
+
+    if (this.state.activeTradingType === "limit") {
+      // 🔧 지정가: 가격, 수량, 총액 모두 표시 (모두 입력 가능)
+      [priceGroup, quantityGroup, totalGroup].forEach((element) => {
+        if (element) element.classList.remove("hidden");
+      });
+
+      if (this.dom.elements.orderPrice) {
+        this.dom.elements.orderPrice.disabled = false;
+      }
+      if (this.dom.elements.orderQuantity) {
+        this.dom.elements.orderQuantity.disabled = false;
+      }
+      if (this.dom.elements.orderTotal) {
+        this.dom.elements.orderTotal.disabled = false; // 🔧 총액 입력 가능하게 변경
+      }
+    } else if (this.state.activeTradingType === "market") {
+      if (this.state.activeTradingSide === "bid") {
+        // 시장가 매수: 총액만 표시
+        if (marketTotalGroup) marketTotalGroup.classList.remove("hidden");
+      } else {
+        // 시장가 매도: 수량만 표시
+        if (quantityGroup) quantityGroup.classList.remove("hidden");
+      }
+    }
+  }
+
+  // 🔧 가격-수량-총액 상호 연동 업데이트
   updateOrderTotal() {
     if (this.state.activeTradingType !== "limit") return;
 
@@ -290,8 +417,40 @@ export class UIController {
     const orderQuantity =
       Utils.parseNumber(this.dom.elements.orderQuantity?.value) || 0;
 
-    const total = orderPrice * orderQuantity;
-    this.dom.elements.orderTotal.value = Utils.formatKRW(total);
+    if (orderPrice > 0 && orderQuantity > 0) {
+      const total = orderPrice * orderQuantity;
+      this.dom.elements.orderTotal.value = Utils.formatKRW(total);
+    }
+  }
+
+  // 🔧 총액에서 수량 계산
+  updateQuantityFromTotal() {
+    if (this.state.activeTradingType !== "limit") return;
+
+    const orderTotal =
+      Utils.parseNumber(this.dom.elements.orderTotal?.value) || 0;
+    const orderPrice =
+      Utils.parseNumber(this.dom.elements.orderPrice?.value) || 0;
+
+    if (orderPrice > 0 && orderTotal > 0) {
+      const quantity = Utils.calculateQuantityFromTotal(orderTotal, orderPrice);
+      this.dom.elements.orderQuantity.value = Utils.formatCoinAmount(quantity);
+    }
+  }
+
+  // 🔧 가격에서 수량 계산 (총액이 고정된 경우)
+  updateQuantityFromPrice() {
+    if (this.state.activeTradingType !== "limit") return;
+
+    const orderTotal =
+      Utils.parseNumber(this.dom.elements.orderTotal?.value) || 0;
+    const orderPrice =
+      Utils.parseNumber(this.dom.elements.orderPrice?.value) || 0;
+
+    if (orderPrice > 0 && orderTotal > 0) {
+      const quantity = Utils.calculateQuantityFromTotal(orderTotal, orderPrice);
+      this.dom.elements.orderQuantity.value = Utils.formatCoinAmount(quantity);
+    }
   }
 
   updateMarketQuantity() {
@@ -312,6 +471,7 @@ export class UIController {
     }
   }
 
+  // 🔧 개선된 퍼센트 드롭다운 (코인별 호가 단위 적용)
   createPercentageDropdown() {
     const dropdown = this.dom.elements.pricePercentageDropdown;
     if (!dropdown) return;
@@ -359,10 +519,12 @@ export class UIController {
       );
     }
 
+    // 🔧 코인 전환 시 현재가로 가격 설정 (호가 단위 적용)
     if (this.state.activeTradingType === "limit") {
       const currentPrice = this.state.latestTickerData[code]?.trade_price || 0;
       if (currentPrice > 0) {
-        this.dom.setOrderPrice(currentPrice);
+        const adjustedPrice = Utils.adjustPriceToStep(currentPrice, code);
+        this.dom.setOrderPrice(adjustedPrice);
       }
     }
 

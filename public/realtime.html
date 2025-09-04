@@ -118,12 +118,14 @@
               </div>
             </div>
 
-            <div class="trading-total-group">
+            <!-- 🔧 지정가용 주문총액 - 퍼센트 버튼 제거 -->
+            <div class="trading-input-group total-input-group">
               <label for="order-total">주문총액</label>
-              <input type="text" id="order-total" placeholder="0" disabled />
+              <input type="text" id="order-total" placeholder="0" />
             </div>
 
-            <div class="trading-total-group hidden">
+            <!-- 시장가용 주문총액 -->
+            <div class="trading-input-group market-total-group hidden">
               <label for="order-total-market">주문총액</label>
               <input type="text" id="order-total-market" placeholder="0" />
               <div class="quantity-btns">
@@ -145,6 +147,14 @@
               </button>
               <button id="filled-orders-tab" class="tab-button">
                 체결 내역
+              </button>
+              <!-- 🔄 전체 새로고침 버튼만 유지 -->
+              <button
+                id="refresh-all-orders"
+                class="tab-button refresh-tab"
+                title="전체 새로고침"
+              >
+                🔄
               </button>
             </div>
             <div id="pending-orders-section" class="tab-content">

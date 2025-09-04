@@ -1,4 +1,4 @@
-// crypto-trading-app.js
+// crypto-trading-app.js - 매니저 간 참조 설정
 import { TradingState } from "./trading-state.js";
 import { DOMManager } from "./dom-manager.js";
 import { UIController } from "./ui-controller.js";
@@ -12,10 +12,15 @@ export class CryptoTradingApp {
     this.state = new TradingState();
     this.domManager = new DOMManager();
 
+    // 매니저 인스턴스 생성
+    this.chartManager = new ChartManager(this.state);
     this.tradingManager = new TradingManager(this.state, this.domManager);
     this.uiController = new UIController(this.state, this.domManager);
 
-    this.chartManager = new ChartManager(this.state);
+    // 🔧 매니저 간 참조 설정 (순서 중요)
+    this.uiController.setManagers(this.chartManager, this.tradingManager);
+    this.tradingManager.setUIController(this.uiController);
+
     this.eventManager = new EventManager(
       this.state,
       this.domManager,
@@ -23,11 +28,14 @@ export class CryptoTradingApp {
       this.tradingManager,
       this.chartManager
     );
+
     this.webSocketManager = new WebSocketManager(
       this.state,
       this.uiController,
       this.tradingManager
     );
+
+    console.log("🔧 매니저 간 참조 설정 완료");
   }
 
   async initialize() {

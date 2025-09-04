@@ -1,4 +1,4 @@
-// src/managers/database-manager.js (Enhanced with Order Matching)
+// src/managers/database-manager.js - 개선된 버전
 const sql = require("mssql");
 const CONFIG = require("../config");
 const KRWUtils = require("../utils/krw-utils");
@@ -64,7 +64,7 @@ class DatabaseManager {
       SELECT id, market, side, order_type, price, quantity, remaining_quantity, 
              total_amount, status, created_at
       FROM pending_orders 
-      WHERE user_id = @userId AND status = 'pending'
+      WHERE user_id = @userId AND status IN ('pending', 'partial')
       ORDER BY created_at DESC
     `);
 
@@ -81,7 +81,7 @@ class DatabaseManager {
         SELECT id, user_id, market, side, order_type, price, quantity, 
                remaining_quantity, total_amount, status, created_at
         FROM pending_orders 
-        WHERE market = @market AND status = 'pending' AND remaining_quantity > 0
+        WHERE market = @market AND status IN ('pending', 'partial') AND remaining_quantity > 0
         ORDER BY 
           CASE WHEN side = 'bid' THEN price END DESC,  -- 매수는 높은 가격부터
           CASE WHEN side = 'ask' THEN price END ASC,   -- 매도는 낮은 가격부터
@@ -143,7 +143,7 @@ class DatabaseManager {
         .input("userId", sql.Int, userId).query(`
           SELECT market, side, price, remaining_quantity, total_amount, status
           FROM pending_orders 
-          WHERE id = @orderId AND user_id = @userId AND status = 'pending'
+          WHERE id = @orderId AND user_id = @userId AND status IN ('pending', 'partial')
         `);
 
       if (orderResult.recordset.length === 0) {
@@ -156,7 +156,7 @@ class DatabaseManager {
       await request.query(`
         UPDATE pending_orders 
         SET status = 'cancelled', updated_at = GETDATE()
-        WHERE id = @orderId AND user_id = @userId AND status = 'pending'
+        WHERE id = @orderId AND user_id = @userId AND status IN ('pending', 'partial')
       `);
 
       // 매수 주문 취소시 KRW 잔고 복구
@@ -210,7 +210,7 @@ class DatabaseManager {
   }
 
   /**
-   * 주문 체결 트랜잭션 처리 (체결 엔진용)
+   * 🔧 개선된 주문 체결 트랜잭션 처리 (체결 엔진용)
    */
   async executeOrderFillTransaction(
     userId,
@@ -251,12 +251,15 @@ class DatabaseManager {
       // 잔고 업데이트
       if (side === "bid") {
         // 매수 체결: 코인 잔고 증가
-        await request.input("coinName", sql.NVarChar, `${coinName}_balance`)
-          .query(`
-            UPDATE users 
-            SET ${coinName}_balance = ${coinName}_balance + @executedQuantity
-            WHERE id = @userId
-          `);
+        await request.query(`
+          UPDATE users 
+          SET ${coinName}_balance = ${coinName}_balance + @executedQuantity
+          WHERE id = @userId
+        `);
+
+        console.log(
+          `🪙 매수 체결 - ${coinName.toUpperCase()} 잔고 증가: ${executedQuantity}개`
+        );
       } else {
         // 매도 체결: KRW 잔고 증가
         await request.query(`
@@ -264,6 +267,12 @@ class DatabaseManager {
           SET krw_balance = krw_balance + @totalAmount
           WHERE id = @userId
         `);
+
+        console.log(
+          `💰 매도 체결 - KRW 잔고 증가: ${KRWUtils.toInteger(
+            totalAmount
+          ).toLocaleString()}원`
+        );
       }
 
       // 거래 내역 기록
@@ -273,21 +282,56 @@ class DatabaseManager {
       `);
 
       // 대기 주문 상태 업데이트
-      const newStatus = remainingQuantity <= 0 ? "filled" : "partial";
+      const newStatus = remainingQuantity <= 0.00000001 ? "filled" : "partial";
 
       await request.input("newStatus", sql.NVarChar, newStatus).query(`
-          UPDATE pending_orders 
-          SET remaining_quantity = @remainingQuantity,
-              status = @newStatus,
-              updated_at = GETDATE()
-          WHERE id = @orderId
-        `);
+        UPDATE pending_orders 
+        SET remaining_quantity = @remainingQuantity,
+            status = @newStatus,
+            updated_at = GETDATE()
+        WHERE id = @orderId
+      `);
 
       await transaction.commit();
+
+      console.log(
+        `✅ 체결 트랜잭션 완료 - 주문ID: ${orderId}, 상태: ${newStatus}, 잔여: ${remainingQuantity}`
+      );
     } catch (error) {
       await transaction.rollback();
+      console.error(`❌ 체결 트랜잭션 실패 - 주문ID: ${orderId}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * 🔧 잔고 조정 함수 (부분 체결 시 환불 등에 사용)
+   */
+  async adjustUserBalance(userId, balanceType, amount) {
+    const request = new sql.Request(this.pool);
+
+    const adjustedAmount =
+      balanceType === "krw_balance" ? KRWUtils.toInteger(amount) : amount;
+
+    await request
+      .input("userId", sql.Int, userId)
+      .input(
+        "amount",
+        sql.Decimal(18, balanceType === "krw_balance" ? 0 : 8),
+        adjustedAmount
+      ).query(`
+        UPDATE users 
+        SET ${balanceType} = ${balanceType} + @amount
+        WHERE id = @userId
+      `);
+
+    console.log(
+      `🔧 잔고 조정: 사용자 ${userId}, ${balanceType} ${amount > 0 ? "+" : ""}${
+        balanceType === "krw_balance"
+          ? KRWUtils.toInteger(amount).toLocaleString() + "원"
+          : amount + "개"
+      }`
+    );
   }
 
   async executeTradeTransaction(
@@ -408,6 +452,46 @@ class DatabaseManager {
           ${coinName}_balance = ${coinName}_balance - @finalQuantity 
       WHERE id = @userId
     `);
+  }
+
+  /**
+   * 🔧 데이터베이스 통계 및 모니터링 함수들
+   */
+  async getOrderStatistics() {
+    const request = new sql.Request(this.pool);
+    const result = await request.query(`
+      SELECT 
+        status,
+        COUNT(*) as count,
+        AVG(CAST(price as FLOAT)) as avg_price,
+        SUM(CAST(total_amount as FLOAT)) as total_volume
+      FROM pending_orders 
+      GROUP BY status
+    `);
+
+    return result.recordset;
+  }
+
+  async getUserOrderHistory(userId, limit = 100) {
+    const request = new sql.Request(this.pool);
+    const result = await request
+      .input("userId", sql.Int, userId)
+      .input("limit", sql.Int, limit).query(`
+        SELECT TOP (@limit)
+          'transaction' as type,
+          market, side, price, quantity, total_amount, created_at
+        FROM transactions 
+        WHERE user_id = @userId
+        UNION ALL
+        SELECT TOP (@limit)
+          'pending' as type,
+          market, side, price, remaining_quantity, total_amount, created_at
+        FROM pending_orders 
+        WHERE user_id = @userId AND status IN ('pending', 'partial')
+        ORDER BY created_at DESC
+      `);
+
+    return result.recordset;
   }
 
   async close() {

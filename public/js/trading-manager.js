@@ -1,11 +1,18 @@
-// TradingManager.js
+// TradingManager.js - 최종 수정된 전체 코드
 
 import { Utils } from "./utils.js";
+import { MIN_ORDER_AMOUNTS } from "./constants.js";
 
 export class TradingManager {
   constructor(state, domManager) {
     this.state = state;
     this.dom = domManager;
+    this.uiController = null; // 🔧 UIController 참조 추가
+  }
+
+  // 🔧 UIController 참조 설정
+  setUIController(uiController) {
+    this.uiController = uiController;
   }
 
   async cancelOrder(orderId) {
@@ -27,8 +34,8 @@ export class TradingManager {
 
       if (response.ok) {
         this.dom.showOrderResult(result.message, true);
-        await this.fetchPendingOrders();
-        await this.fetchUserBalance();
+        // 🔧 취소 후 자동 새로고침
+        await this.refreshAllData();
       } else {
         this.dom.showOrderResult(
           result.error || "주문 취소에 실패했습니다.",
@@ -42,6 +49,16 @@ export class TradingManager {
   }
 
   async sendOrder(side) {
+    // 🔧 주문 시작 시 로딩 상태 표시
+    const tradeButton = document.querySelector(
+      side === "bid" ? ".bid-button" : ".ask-button"
+    );
+    const originalText = tradeButton?.textContent;
+    if (tradeButton) {
+      tradeButton.disabled = true;
+      tradeButton.innerHTML = `${originalText} <div class="loading-spinner"></div>`;
+    }
+
     const orderData = {
       market: this.state.activeCoin,
       side: side,
@@ -54,7 +71,14 @@ export class TradingManager {
         this.dom.elements.orderQuantity?.value
       );
 
-      if (!this.validateLimitOrder(price, quantity)) return;
+      if (!this.validateLimitOrder(price, quantity)) {
+        // 🔧 검증 실패 시 버튼 복구
+        if (tradeButton) {
+          tradeButton.disabled = false;
+          tradeButton.textContent = originalText;
+        }
+        return { success: false };
+      }
       orderData.price = price;
       orderData.quantity = quantity;
     } else if (this.state.activeTradingType === "market") {
@@ -62,14 +86,26 @@ export class TradingManager {
         const totalAmount = Utils.parseNumber(
           this.dom.elements.orderTotalMarket?.value
         );
-        if (!this.validateMarketBuyOrder(totalAmount)) return;
+        if (!this.validateMarketBuyOrder(totalAmount)) {
+          if (tradeButton) {
+            tradeButton.disabled = false;
+            tradeButton.textContent = originalText;
+          }
+          return { success: false };
+        }
         orderData.price = totalAmount;
         orderData.quantity = 0;
       } else {
         const quantity = Utils.parseNumber(
           this.dom.elements.orderQuantity?.value
         );
-        if (!this.validateMarketSellOrder(quantity)) return;
+        if (!this.validateMarketSellOrder(quantity)) {
+          if (tradeButton) {
+            tradeButton.disabled = false;
+            tradeButton.textContent = originalText;
+          }
+          return { success: false };
+        }
         orderData.quantity = quantity;
         orderData.price = 0;
       }
@@ -94,14 +130,12 @@ export class TradingManager {
           );
         }
 
-        // 주문 성공 후 필요한 데이터들을 새로고침하고 반환
-        await this.fetchUserBalance();
-        const pendingOrders = await this.fetchPendingOrders();
-        const filledOrders = await this.fetchFilledOrders();
+        // 🔧 주문 성공 후 모든 데이터 새로고침
+        await this.refreshAllData();
 
         this.clearOrderInputs();
 
-        return { pendingOrders, filledOrders };
+        return { success: true };
       } else {
         this.dom.showOrderResult(
           result.error || "주문 처리 중 오류가 발생했습니다.",
@@ -111,9 +145,39 @@ export class TradingManager {
     } catch (error) {
       console.error("주문 요청 오류:", error);
       this.dom.showOrderResult("주문 요청 중 오류가 발생했습니다.", false);
+    } finally {
+      // 🔧 버튼 복구
+      if (tradeButton) {
+        tradeButton.disabled = false;
+        tradeButton.textContent = originalText;
+      }
     }
 
-    return null;
+    return { success: false };
+  }
+
+  // 🔧 모든 데이터 새로고침 함수
+  async refreshAllData() {
+    try {
+      // 병렬로 실행하여 속도 향상
+      const [pendingOrders, filledOrders] = await Promise.all([
+        this.fetchPendingOrders(),
+        this.fetchFilledOrders(),
+        this.fetchUserBalance(),
+      ]);
+
+      // UI 업데이트
+      if (this.uiController) {
+        this.uiController.updatePendingOrdersList(pendingOrders);
+        this.uiController.updateFilledOrdersList(filledOrders);
+        this.uiController.updateTradingPanel();
+      }
+
+      return { pendingOrders, filledOrders };
+    } catch (error) {
+      console.error("데이터 새로고침 오류:", error);
+      throw error;
+    }
   }
 
   clearOrderInputs() {
@@ -137,6 +201,7 @@ export class TradingManager {
     }
   }
 
+  // 🔧 개선된 지정가 주문 검증 (코인별 최소 금액 적용)
   validateLimitOrder(price, quantity) {
     if (!price || !quantity || price <= 0 || quantity <= 0) {
       this.dom.showOrderResult(
@@ -145,6 +210,63 @@ export class TradingManager {
       );
       return false;
     }
+
+    // 🔧 코인별 최소 주문 금액 체크
+    const minOrderAmount = MIN_ORDER_AMOUNTS[this.state.activeCoin] || 5000;
+    const totalAmount = price * quantity;
+    if (totalAmount < minOrderAmount) {
+      this.dom.showOrderResult(
+        `${
+          this.state.activeCoin.split("-")[1]
+        } 최소 주문 금액은 ${minOrderAmount.toLocaleString()}원입니다.`,
+        false
+      );
+      return false;
+    }
+
+    // 🔧 코인별 가격 단위 체크
+    const priceStep = Utils.getPriceStep(price, this.state.activeCoin);
+    if (price % priceStep !== 0) {
+      const adjustedPrice = Utils.adjustPriceToStep(
+        price,
+        this.state.activeCoin
+      );
+      this.dom.showOrderResult(
+        `${
+          this.state.activeCoin.split("-")[1]
+        } 가격은 ${priceStep.toLocaleString()}원 단위로 입력해주세요. (권장: ${Utils.formatKRW(
+          adjustedPrice
+        )}원)`,
+        false
+      );
+      return false;
+    }
+
+    // 잔고 확인
+    if (this.state.activeTradingSide === "bid") {
+      if (this.state.userKRWBalance < totalAmount) {
+        this.dom.showOrderResult(
+          `잔액이 부족합니다. (필요: ${Utils.formatKRW(
+            totalAmount
+          )}원, 보유: ${Utils.formatKRW(this.state.userKRWBalance)}원)`,
+          false
+        );
+        return false;
+      }
+    } else {
+      const availableCoin =
+        this.state.userCoinBalance[this.state.activeCoin] || 0;
+      if (availableCoin < quantity) {
+        this.dom.showOrderResult(
+          `보유 코인이 부족합니다. (필요: ${Utils.formatCoinAmount(
+            quantity
+          )}개, 보유: ${Utils.formatCoinAmount(availableCoin)}개)`,
+          false
+        );
+        return false;
+      }
+    }
+
     return true;
   }
 
@@ -153,6 +275,26 @@ export class TradingManager {
       this.dom.showOrderResult("주문 총액을 올바르게 입력해주세요.", false);
       return false;
     }
+
+    const minOrderAmount = MIN_ORDER_AMOUNTS[this.state.activeCoin] || 5000;
+    if (totalAmount < minOrderAmount) {
+      this.dom.showOrderResult(
+        `최소 주문 금액은 ${minOrderAmount.toLocaleString()}원입니다.`,
+        false
+      );
+      return false;
+    }
+
+    if (this.state.userKRWBalance < totalAmount) {
+      this.dom.showOrderResult(
+        `잔액이 부족합니다. (필요: ${Utils.formatKRW(
+          totalAmount
+        )}원, 보유: ${Utils.formatKRW(this.state.userKRWBalance)}원)`,
+        false
+      );
+      return false;
+    }
+
     return true;
   }
 
@@ -161,6 +303,32 @@ export class TradingManager {
       this.dom.showOrderResult("주문 수량을 올바르게 입력해주세요.", false);
       return false;
     }
+
+    const currentPrice =
+      this.state.latestTickerData[this.state.activeCoin]?.trade_price || 0;
+    const totalAmount = quantity * currentPrice;
+    const minOrderAmount = MIN_ORDER_AMOUNTS[this.state.activeCoin] || 5000;
+
+    if (totalAmount < minOrderAmount) {
+      this.dom.showOrderResult(
+        `최소 주문 금액은 ${minOrderAmount.toLocaleString()}원입니다.`,
+        false
+      );
+      return false;
+    }
+
+    const availableCoin =
+      this.state.userCoinBalance[this.state.activeCoin] || 0;
+    if (availableCoin < quantity) {
+      this.dom.showOrderResult(
+        `보유 코인이 부족합니다. (필요: ${Utils.formatCoinAmount(
+          quantity
+        )}개, 보유: ${Utils.formatCoinAmount(availableCoin)}개)`,
+        false
+      );
+      return false;
+    }
+
     return true;
   }
 
@@ -178,8 +346,11 @@ export class TradingManager {
         "KRW-ETH": data.eth_balance || 0,
         "KRW-XRP": data.xrp_balance || 0,
       };
+
+      return data;
     } catch (error) {
       console.error("잔고 데이터 로딩 오류:", error);
+      throw error;
     }
   }
 
@@ -219,27 +390,72 @@ export class TradingManager {
     }
   }
 
+  // 🔧 개선된 퍼센트 계산 (무조건 1000원 단위)
   calculatePercentageAmount(percent) {
     const percentage = percent / 100;
 
     if (this.state.activeTradingType === "limit") {
       if (this.state.activeTradingSide === "bid") {
+        // 매수: 잔고 기준으로 총액 계산
+        let totalAmount = Math.floor(this.state.userKRWBalance * percentage);
+
+        // 🔧 비트코인/이더리움의 경우 무조건 1000원 단위로 조정
+        if (
+          this.state.activeCoin === "KRW-BTC" ||
+          this.state.activeCoin === "KRW-ETH"
+        ) {
+          totalAmount = Math.floor(totalAmount / 1000) * 1000;
+        }
+
+        this.dom.setOrderTotal(totalAmount);
+
+        // 가격이 입력되어 있으면 수량 자동 계산
         const orderPrice = Utils.parseNumber(
           this.dom.elements.orderPrice?.value
         );
         if (orderPrice > 0) {
-          const quantity =
-            (this.state.userKRWBalance * percentage) / orderPrice;
+          const quantity = totalAmount / orderPrice;
           this.dom.setOrderQuantity(quantity);
         }
       } else {
+        // 매도: 보유 코인 기준으로 수량 계산
         const quantity =
           this.state.userCoinBalance[this.state.activeCoin] * percentage;
         this.dom.setOrderQuantity(quantity);
+
+        // 가격이 입력되어 있으면 총액 자동 계산
+        const orderPrice = Utils.parseNumber(
+          this.dom.elements.orderPrice?.value
+        );
+        if (orderPrice > 0) {
+          let total = quantity * orderPrice;
+
+          // 🔧 비트코인/이더리움의 경우 총액도 무조건 1000원 단위로 조정
+          if (
+            this.state.activeCoin === "KRW-BTC" ||
+            this.state.activeCoin === "KRW-ETH"
+          ) {
+            total = Math.floor(total / 1000) * 1000;
+            // 총액이 조정되었으므로 수량도 다시 계산
+            const adjustedQuantity = total / orderPrice;
+            this.dom.setOrderQuantity(adjustedQuantity);
+          }
+
+          this.dom.setOrderTotal(total);
+        }
       }
     } else if (this.state.activeTradingType === "market") {
       if (this.state.activeTradingSide === "bid") {
-        const totalAmount = Math.floor(this.state.userKRWBalance * percentage);
+        let totalAmount = Math.floor(this.state.userKRWBalance * percentage);
+
+        // 🔧 시장가 매수도 1000원 단위로 조정
+        if (
+          this.state.activeCoin === "KRW-BTC" ||
+          this.state.activeCoin === "KRW-ETH"
+        ) {
+          totalAmount = Math.floor(totalAmount / 1000) * 1000;
+        }
+
         this.dom.setOrderTotalMarket(totalAmount);
       } else {
         const quantity =
@@ -249,15 +465,65 @@ export class TradingManager {
     }
   }
 
+  // 🔧 개선된 가격 조정 (코인별 호가 단위 적용)
   adjustPrice(direction) {
     const currentPrice =
       Utils.parseNumber(this.dom.elements.orderPrice?.value) || 0;
-    const step = Utils.getPriceStep(currentPrice);
+    const step = Utils.getPriceStep(currentPrice, this.state.activeCoin);
     const newPrice =
       direction === "up"
         ? currentPrice + step
-        : Math.max(0, currentPrice - step);
+        : Math.max(step, currentPrice - step); // 최소값을 step으로 설정
 
     this.dom.setOrderPrice(newPrice);
+
+    // 🔧 가격 변경 시 총액도 업데이트 (수량이 있는 경우)
+    if (this.state.activeTradingType === "limit") {
+      const quantity =
+        Utils.parseNumber(this.dom.elements.orderQuantity?.value) || 0;
+      const total = Utils.parseNumber(this.dom.elements.orderTotal?.value) || 0;
+
+      if (quantity > 0) {
+        // 수량 기준으로 총액 재계산
+        let newTotal = newPrice * quantity;
+
+        // 🔧 비트코인/이더리움의 경우 총액을 1000원 단위로 조정
+        if (
+          this.state.activeCoin === "KRW-BTC" ||
+          this.state.activeCoin === "KRW-ETH"
+        ) {
+          newTotal = Math.floor(newTotal / 1000) * 1000;
+        }
+
+        this.dom.setOrderTotal(newTotal);
+      } else if (total > 0) {
+        // 총액 기준으로 수량 재계산
+        const newQuantity = Utils.calculateQuantityFromTotal(
+          total,
+          newPrice,
+          this.state.activeCoin
+        );
+        this.dom.setOrderQuantity(newQuantity);
+      }
+    }
+  }
+
+  // 🔧 주문총액 변경 시 수량 자동 계산
+  updateQuantityFromTotal() {
+    if (this.state.activeTradingType !== "limit") return;
+
+    const orderTotal =
+      Utils.parseNumber(this.dom.elements.orderTotal?.value) || 0;
+    const orderPrice =
+      Utils.parseNumber(this.dom.elements.orderPrice?.value) || 0;
+
+    if (orderPrice > 0) {
+      const quantity = Utils.calculateQuantityFromTotal(
+        orderTotal,
+        orderPrice,
+        this.state.activeCoin
+      );
+      this.dom.setOrderQuantity(quantity);
+    }
   }
 }
