@@ -912,3 +912,18 @@ canvas {
     gap: 2px;
   }
 }
+
+/* style.css */
+.chart-container {
+  display: flex;
+  flex-direction: column; /* 차트를 세로로 쌓음 */
+  width: 100%;
+  height: 100vh; /* 화면 전체 높이 사용 (테스트용) */
+}
+
+#priceChart,
+#volumeChart {
+  flex-grow: 1; /* flex 속성을 사용하여 공간을 차지하도록 함 */
+  /* 아래 높이/너비는 필요에 따라 조정 가능 */
+  min-height: 150px; /* 최소 높이를 설정하여 차트가 보장되도록 함 */
+}
