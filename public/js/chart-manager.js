@@ -11,6 +11,8 @@ export class ChartManager {
     this.volumeSeries = null;
     this.indicatorSeries = {}; // 지표 시리즈를 관리할 객체
     this.cacheManager = new CacheManager();
+    this.allCandleData = []; // 🆕 전체 캔들 데이터 저장
+    this.isLoadingMore = false;
   }
 
   // 기존 async fetchAndRender() { 메서드 전체를 다음으로 교체
@@ -34,7 +36,7 @@ export class ChartManager {
 
     try {
       const response = await fetch(
-        `/api/candles?unit=${this.state.activeUnit}&market=${this.state.activeCoin}`
+        `/api/candles?unit=${this.state.activeUnit}&market=${this.state.activeCoin}&count=500` // 🆕 500개로 증가
       );
       const data = await response.json();
 
@@ -268,14 +270,24 @@ export class ChartManager {
           labelBackgroundColor: "rgba(0, 0, 0, 0.8)",
         },
       },
+      // 🔧 스크롤 및 스케일 설정 수정
       handleScroll: {
-        mouseWheel: false,
-        pressedMouseMove: true,
+        mouseWheel: true, // 마우스 휠 스크롤 활성화
+        pressedMouseMove: true, // 드래그 스크롤 활성화
+        horzTouchDrag: true, // 터치 드래그 활성화
+        vertTouchDrag: false, // 세로 터치 드래그 비활성화
       },
       handleScale: {
-        axisPressedMouseMove: true,
-        mouseWheel: false,
-        pinch: true,
+        axisPressedMouseMove: {
+          time: true, // 시간축 스케일 활성화
+          price: true, // 가격축 스케일 활성화
+        },
+        mouseWheel: true, // 마우스 휠 줌 활성화
+        pinch: true, // 핀치 줌 활성화
+        axisDoubleClickReset: {
+          time: true, // 시간축 더블클릭 리셋
+          price: true, // 가격축 더블클릭 리셋
+        },
       },
     };
 
@@ -415,7 +427,9 @@ export class ChartManager {
 
     // 반응형 처리
     this.setupResponsive();
+    this.setupInfiniteScroll(); // 🆕 추가
     this.lastCandleData = candleData;
+    this.lastVolumeData = volumeData;
   }
 
   addIndicatorToMainChart(ma5Data, ma20Data) {
@@ -583,5 +597,185 @@ export class ChartManager {
         }
       }
     }
+  }
+  // setupInfiniteScroll 메서드를 다음으로 수정
+  setupInfiniteScroll() {
+    if (!this.priceChart) return;
+
+    this.priceChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+      if (this.isLoadingMore || !range) return;
+
+      // 🔧 왼쪽 끝에 가까워질 때 조건 완화 (더 일찍 로드)
+      const totalRange = range.to - range.from;
+      const leftThreshold = range.from + totalRange * 0.1; // 전체 범위의 10% 지점
+
+      if (range.from <= 10 || range.from <= leftThreshold) {
+        this.loadMoreHistoricalData();
+      }
+    });
+  }
+
+  // loadMoreHistoricalData 메서드를 다음으로 교체
+  async loadMoreHistoricalData() {
+    if (this.isLoadingMore || this.allCandleData.length === 0) return;
+
+    this.isLoadingMore = true;
+    console.log("📈 추가 히스토리 데이터 로딩...");
+
+    try {
+      const oldestCandle = this.allCandleData[this.allCandleData.length - 1];
+      const to = oldestCandle?.candle_date_time_utc;
+
+      if (!to) {
+        console.warn("⚠️ candle_date_time_utc가 없어서 추가 로딩 중단");
+        return;
+      }
+
+      // 🔧 캐시 키 생성 (to 파라미터 포함)
+      const cacheKey = `${this.state.activeCoin}-${this.state.activeUnit}-${to}`;
+      const cachedData = this.cacheManager.get(
+        this.state.activeCoin,
+        `${this.state.activeUnit}-${to}`
+      );
+
+      let newData;
+
+      if (cachedData) {
+        console.log("📦 캐시된 히스토리 데이터 사용:", cacheKey);
+        newData = cachedData;
+      } else {
+        console.log("📅 기준 시간:", to);
+
+        const response = await fetch(
+          `/api/candles?unit=${this.state.activeUnit}&market=${
+            this.state.activeCoin
+          }&count=200&to=${encodeURIComponent(to)}`
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("❌ API 응답 오류:", response.status, errorText);
+          return;
+        }
+
+        newData = await response.json();
+
+        // 🔧 히스토리 데이터도 캐시에 저장
+        if (newData && newData.length > 0) {
+          this.cacheManager.set(
+            this.state.activeCoin,
+            `${this.state.activeUnit}-${to}`,
+            newData
+          );
+          console.log("💾 히스토리 데이터 캐시 저장:", cacheKey);
+        }
+      }
+
+      if (newData && newData.length > 0) {
+        // 중복 제거 후 데이터 병합
+        const filteredNewData = newData.filter(
+          (newCandle) =>
+            !this.allCandleData.find(
+              (existingCandle) =>
+                existingCandle.candle_date_time_utc ===
+                newCandle.candle_date_time_utc
+            )
+        );
+
+        if (filteredNewData.length > 0) {
+          this.allCandleData.push(...filteredNewData);
+          console.log(`📊 추가 데이터 ${filteredNewData.length}개 로드됨`);
+
+          this.appendHistoricalData(filteredNewData);
+        } else {
+          console.log("📭 새로운 데이터가 없습니다 (모두 중복)");
+        }
+      } else {
+        console.log("📭 더 이상 가져올 데이터가 없습니다");
+      }
+    } catch (error) {
+      console.error("❌ 추가 데이터 로딩 실패:", error);
+    } finally {
+      this.isLoadingMore = false;
+    }
+  }
+
+  // 🔧 새 메서드 추가 (loadMoreHistoricalData 다음에)
+  appendHistoricalData(newData) {
+    // 새 데이터 처리
+    const sortedNewData = newData.reverse();
+    const newCandleData = [];
+    const newVolumeData = [];
+
+    for (let i = 0; i < sortedNewData.length; i++) {
+      const d = sortedNewData[i];
+
+      if (!d || !d.candle_date_time_kst) continue;
+
+      let timeValue;
+      try {
+        const kstTimeString = d.candle_date_time_kst;
+        const kstDate = new Date(kstTimeString);
+        timeValue = kstDate.getTime();
+        if (isNaN(timeValue)) continue;
+      } catch (error) {
+        continue;
+      }
+
+      const time = Math.floor(timeValue / 1000);
+      const open = parseFloat(d.opening_price);
+      const high = parseFloat(d.high_price);
+      const low = parseFloat(d.low_price);
+      const close = parseFloat(d.trade_price);
+      const volume = parseFloat(d.candle_acc_trade_volume) || 0;
+
+      if (
+        isNaN(open) ||
+        isNaN(high) ||
+        isNaN(low) ||
+        isNaN(close) ||
+        open <= 0 ||
+        high <= 0 ||
+        low <= 0 ||
+        close <= 0
+      )
+        continue;
+
+      if (high < Math.max(open, close) || low > Math.min(open, close)) continue;
+
+      newCandleData.push({ time, open, high, low, close });
+      newVolumeData.push({
+        time,
+        value: Math.max(0, volume),
+        color:
+          close >= open ? "rgba(38, 166, 154, 0.5)" : "rgba(239, 83, 80, 0.5)",
+      });
+    }
+
+    // 시간 순 정렬
+    newCandleData.sort((a, b) => a.time - b.time);
+    newVolumeData.sort((a, b) => a.time - b.time);
+
+    // 🔧 기존 데이터에 새 데이터 추가 (차트 재렌더링 없이)
+    if (this.priceSeries && newCandleData.length > 0) {
+      // 기존 데이터 가져오기
+      const existingData = this.lastCandleData || [];
+      const combinedData = [...newCandleData, ...existingData];
+
+      // 전체 데이터로 업데이트
+      this.priceSeries.setData(combinedData);
+      this.lastCandleData = combinedData;
+    }
+
+    if (this.volumeSeries && newVolumeData.length > 0) {
+      // 볼륨 데이터도 동일하게 처리
+      this.volumeSeries.setData([
+        ...newVolumeData,
+        ...(this.lastVolumeData || []),
+      ]);
+      this.lastVolumeData = [...newVolumeData, ...(this.lastVolumeData || [])];
+    }
+
+    console.log("✅ 추가 데이터 차트에 적용 완료");
   }
 }

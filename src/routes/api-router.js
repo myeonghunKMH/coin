@@ -88,8 +88,10 @@ class APIRouter {
     }
   }
 
+  // 기존 async getCandles(req, res) { 메서드 전체를 다음으로 교체
   async getCandles(req, res) {
-    const { unit, market } = req.query;
+    const { unit, market, count = 200, to } = req.query;
+    const requestCount = Math.min(parseInt(count), 1000); // 최대 1000개
 
     const validation = ValidationUtils.validateApiParams({ unit, market }, [
       "unit",
@@ -103,19 +105,49 @@ class APIRouter {
     }
 
     try {
-      let url;
-      if (unit === "1D") {
-        url = `https://api.upbit.com/v1/candles/days?market=${market}&count=200`;
-      } else {
-        url = `https://api.upbit.com/v1/candles/minutes/${unit}?market=${market}&count=200`;
+      const allCandles = [];
+      let currentTo = to;
+      let remaining = requestCount;
+
+      while (remaining > 0) {
+        const batchSize = Math.min(remaining, 200);
+        let url;
+
+        if (unit === "1D") {
+          url = `https://api.upbit.com/v1/candles/days?market=${market}&count=${batchSize}`;
+        } else {
+          url = `https://api.upbit.com/v1/candles/minutes/${unit}?market=${market}&count=${batchSize}`;
+        }
+
+        // 🔧 to 파라미터 처리 개선
+        if (currentTo && currentTo !== "undefined") {
+          // URL 인코딩 처리
+          const encodedTo = encodeURIComponent(currentTo);
+          url += `&to=${encodedTo}`;
+        }
+
+        console.log(`📡 업비트 API 호출: ${url}`); // 디버깅용 로그
+
+        const response = await axios.get(url, {
+          headers: { "Accept-Encoding": "gzip, deflate" },
+          timeout: 10000,
+        });
+
+        const data = response.data;
+        if (data.length === 0) break;
+
+        allCandles.push(...data);
+        remaining -= data.length;
+
+        // 다음 배치를 위한 to 파라미터 설정
+        if (data.length < batchSize) break;
+        currentTo = data[data.length - 1].candle_date_time_utc;
       }
 
-      const response = await axios.get(url, {
-        headers: { "Accept-Encoding": "gzip, deflate" },
-        timeout: 10000,
-      });
-
-      res.json(response.data);
+      console.log(
+        `📊 캔들 데이터 ${allCandles.length}개 반환: ${market} ${unit}`
+      );
+      res.json(allCandles);
     } catch (error) {
       console.error("❌ 캔들 데이터 요청 오류:", error.message);
       res.status(500).json({
