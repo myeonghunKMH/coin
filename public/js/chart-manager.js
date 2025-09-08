@@ -21,7 +21,8 @@ export class ChartManager {
     // 캐시 확인
     const cachedData = this.cacheManager.get(
       this.state.activeCoin,
-      this.state.activeUnit
+      this.state.activeUnit,
+      null
     );
     if (cachedData) {
       console.log(
@@ -631,7 +632,8 @@ export class ChartManager {
       // 캐시 확인
       const cachedData = this.cacheManager.get(
         this.state.activeCoin,
-        `${this.state.activeUnit}-${to}`
+        this.state.activeUnit,
+        to
       );
 
       let newData;
@@ -663,8 +665,9 @@ export class ChartManager {
         if (newData && newData.length > 0) {
           this.cacheManager.set(
             this.state.activeCoin,
-            `${this.state.activeUnit}-${to}`,
-            newData
+            this.state.activeUnit,
+            newData,
+            to
           );
         }
       }

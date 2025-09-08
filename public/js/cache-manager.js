@@ -1,51 +1,58 @@
 // public/js/cache-manager.js
 export class CacheManager {
   constructor() {
-    this.candleCache = new Map();
     this.cacheTimeout = 60000; // 1분
     this.cache = new Map();
     this.maxSize = 50; // 최대 캐시 크기 증가
     this.maxAge = 300000; // 5분
     // 🔧 주기적 캐시 정리 (10분마다)
     setInterval(() => {
-      this.cleanupHistoryCache();
+      this.cleanupCache();
     }, 600000);
   }
 
-  getCacheKey(market, unit) {
+  getCacheKey(market, unit, to = null) {
+    if (to) {
+      return `${market}-${unit}-${to}`;
+    }
     return `${market}-${unit}`;
   }
 
-  get(market, unit) {
-    const key = this.getCacheKey(market, unit);
-    const cached = this.candleCache.get(key);
+  get(market, unit, to = null) {
+    // to 파라미터 추가
+    const key = this.getCacheKey(market, unit, to);
+    const cached = this.cache.get(key);
 
-    if (cached && this.isValid(cached)) {
+    if (cached && this.isValid(cached, to)) {
       return cached.data;
     }
 
-    this.candleCache.delete(key);
+    this.cache.delete(key); // Cache → cache (소문자)
     return null;
   }
 
-  set(market, unit, data) {
-    const key = this.getCacheKey(market, unit);
-    this.candleCache.set(key, {
+  set(market, unit, data, to = null) {
+    const key = this.getCacheKey(market, unit, to);
+    this.cache.set(key, {
       data,
       timestamp: Date.now(),
     });
   }
 
-  isValid(cached) {
-    return Date.now() - cached.timestamp < this.cacheTimeout;
+  isValid(cached, to = null) {
+    // to 파라미터 추가
+    const now = Date.now();
+    const age = now - cached.timestamp;
+    const maxAge = to ? this.maxAge : this.cacheTimeout;
+    return age < maxAge;
   }
 
   clear() {
-    this.candleCache.clear();
+    this.cache.clear();
   }
 
   // 🔧 히스토리 캐시 정리 메서드 추가
-  cleanupHistoryCache() {
+  cleanupCache() {
     const now = Date.now();
     const keysToDelete = [];
 
