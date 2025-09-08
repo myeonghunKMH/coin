@@ -920,7 +920,7 @@ canvas {
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 420px; /* 🔧 전체 높이 축소 (기존보다 작게) */
+  height: 520px; /* 🔧 전체 높이 축소 (기존보다 작게) */
   border-radius: 4px;
   overflow: hidden;
   background-color: #1a1a1a;
@@ -928,7 +928,7 @@ canvas {
 
 #priceChart {
   flex: 3; /* 가격차트가 더 큰 비율 */
-  min-height: 280px; /* 🔧 최소 높이 설정 */
+  min-height: 400px; /* 🔧 최소 높이 설정 */
   width: 100%;
 }
 

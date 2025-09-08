@@ -204,13 +204,27 @@ export class ChartManager {
       this.priceChart.timeScale().setVisibleLogicalRange(range);
     });
 
-    // 🔧 4. 초기 차트 뷰 설정 및 정렬
+    // 🔧 4. 크로스헤어 동기화
+    this.priceChart.subscribeCrosshairMove((param) => {
+      if (param.point) {
+        this.volumeChart.setCrosshairPosition(param.point);
+      } else {
+        this.volumeChart.clearCrosshairPosition();
+      }
+    });
+
+    this.volumeChart.subscribeCrosshairMove((param) => {
+      if (param.point) {
+        this.priceChart.setCrosshairPosition(param.point);
+      } else {
+        this.priceChart.clearCrosshairPosition();
+      }
+    });
+
+    // 🔧 5. 초기 차트 뷰 설정 및 정렬
     // 두 차트를 동시에 맞춤
     this.priceChart.timeScale().fitContent();
     this.volumeChart.timeScale().fitContent();
-
-    // 🔧 setTimeout 블록 제거
-    // 이 코드를 제거하여 Lightweight Charts의 기본 자동 스케일링 기능을 사용합니다.
 
     // 반응형 처리
     this.setupResponsive();
