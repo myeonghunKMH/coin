@@ -1,4 +1,4 @@
-// chart-manager.js - TradingView Lightweight Charts 버전 (X축 틱 제거 및 정렬 개선)
+// chart-manager.js - TradingView Lightweight Charts 정리된 버전
 import { COIN_NAMES } from "./constants.js";
 import { CacheManager } from "./cache-manager.js";
 
@@ -11,11 +11,10 @@ export class ChartManager {
     this.volumeSeries = null;
     this.indicatorSeries = {}; // 지표 시리즈를 관리할 객체
     this.cacheManager = new CacheManager();
-    this.allCandleData = []; // 🆕 전체 캔들 데이터 저장
+    this.allCandleData = []; // 전체 캔들 데이터 저장
     this.isLoadingMore = false;
   }
 
-  // 기존 async fetchAndRender() { 메서드 전체를 다음으로 교체
   async fetchAndRender() {
     if (!this.state.activeCoin || !this.state.activeUnit) return;
 
@@ -36,7 +35,7 @@ export class ChartManager {
 
     try {
       const response = await fetch(
-        `/api/candles?unit=${this.state.activeUnit}&market=${this.state.activeCoin}&count=500` // 🆕 500개로 증가
+        `/api/candles?unit=${this.state.activeUnit}&market=${this.state.activeCoin}&count=100`
       );
       const data = await response.json();
 
@@ -47,28 +46,17 @@ export class ChartManager {
 
       // 캐시 저장
       this.cacheManager.set(this.state.activeCoin, this.state.activeUnit, data);
-      console.log(
-        "💾 데이터 캐시 저장:",
-        this.state.activeCoin,
-        this.state.activeUnit
-      );
-
       this.processAndRenderData(data);
     } catch (error) {
       console.error("차트 데이터 로딩 오류:", error);
     }
   }
 
-  // 🆕 새 메서드 추가 (fetchAndRender 다음에)
-  // 기존 processAndRenderData 메서드를 다음으로 교체
   processAndRenderData(data) {
     this.allCandleData = [...data];
-
-    console.log("🔍 원본 데이터 샘플:", data.slice(0, 3));
-
     const sortedData = data.reverse();
 
-    // 🔧 더 엄격한 데이터 검증 및 변환
+    // 데이터 검증 및 변환
     const candleData = [];
     const volumeData = [];
 
@@ -81,12 +69,10 @@ export class ChartManager {
         continue;
       }
 
-      // 🔧 KST 시간을 그대로 사용 (변환하지 않음)
+      // KST 시간 처리
       let timeValue;
       try {
         const kstTimeString = d.candle_date_time_kst;
-
-        // KST 시간을 직접 파싱 (오프셋 조정 없이)
         const kstDate = new Date(kstTimeString);
         timeValue = kstDate.getTime();
 
@@ -100,6 +86,7 @@ export class ChartManager {
       }
 
       const time = Math.floor(timeValue / 1000);
+
       // 시간 값 유효성 검사
       const currentTime = Math.floor(Date.now() / 1000);
       const oneYearAgo = currentTime - 365 * 24 * 60 * 60;
@@ -149,15 +136,10 @@ export class ChartManager {
     }
 
     console.log(`✅ 유효한 데이터: ${candleData.length}/${sortedData.length}`);
+
     // 시간 순 정렬
     candleData.sort((a, b) => a.time - b.time);
     volumeData.sort((a, b) => a.time - b.time);
-
-    // 🔧 실제 차트에 표시될 시간 확인
-    console.log("🔍 실제 차트 시간 범위:", {
-      first: new Date(candleData[0]?.time * 1000),
-      last: new Date(candleData[candleData.length - 1]?.time * 1000),
-    });
 
     // 최소 데이터 개수 확인
     if (candleData.length < 5) {
@@ -165,7 +147,7 @@ export class ChartManager {
       return;
     }
 
-    // MA 계산 (안전한 버전)
+    // MA 계산
     const ma5Data = this.calculateSafeMA(candleData, 5);
     const ma20Data = this.calculateSafeMA(candleData, 20);
 
@@ -173,13 +155,11 @@ export class ChartManager {
     this.renderCharts(candleData, volumeData, ma5Data, ma20Data);
   }
 
-  // 🔧 새로운 안전한 MA 계산 메서드 추가
   calculateSafeMA(candleData, period) {
     const result = [];
 
     for (let i = 0; i < candleData.length; i++) {
       if (i < period - 1) {
-        // 충분한 데이터가 없으면 건너뛰기 (null 대신)
         continue;
       }
 
@@ -210,14 +190,6 @@ export class ChartManager {
   }
 
   renderCharts(candleData, volumeData, ma5Data, ma20Data) {
-    console.log("🎨 renderCharts 호출됨");
-    console.log("📊 데이터 개수:", {
-      candle: candleData?.length || 0,
-      volume: volumeData?.length || 0,
-      ma5: ma5Data?.length || 0,
-      ma20: ma20Data?.length || 0,
-    });
-
     // 데이터 유효성 최종 검사
     if (!Array.isArray(candleData) || candleData.length === 0) {
       console.error("❌ 캔들 데이터 없음");
@@ -228,10 +200,6 @@ export class ChartManager {
       console.error("❌ 볼륨 데이터 없음");
       return;
     }
-
-    // 샘플 데이터 로그
-    console.log("🔍 캔들 데이터 샘플:", candleData[0]);
-    console.log("🔍 볼륨 데이터 샘플:", volumeData[0]);
 
     // 기존 차트 제거
     this.destroy();
@@ -244,7 +212,7 @@ export class ChartManager {
       return;
     }
 
-    // 🔧 공통 차트 설정
+    // 공통 차트 설정
     const commonChartConfig = {
       width: priceContainer.clientWidth,
       layout: {
@@ -270,35 +238,34 @@ export class ChartManager {
           labelBackgroundColor: "rgba(0, 0, 0, 0.8)",
         },
       },
-      // 🔧 스크롤 및 스케일 설정 수정
       handleScroll: {
-        mouseWheel: true, // 마우스 휠 스크롤 활성화
-        pressedMouseMove: true, // 드래그 스크롤 활성화
-        horzTouchDrag: true, // 터치 드래그 활성화
-        vertTouchDrag: false, // 세로 터치 드래그 비활성화
+        mouseWheel: true,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+        vertTouchDrag: false,
       },
       handleScale: {
         axisPressedMouseMove: {
-          time: true, // 시간축 스케일 활성화
-          price: true, // 가격축 스케일 활성화
+          time: true,
+          price: true,
         },
-        mouseWheel: true, // 마우스 휠 줌 활성화
-        pinch: true, // 핀치 줌 활성화
+        mouseWheel: true,
+        pinch: true,
         axisDoubleClickReset: {
-          time: true, // 시간축 더블클릭 리셋
-          price: true, // 가격축 더블클릭 리셋
+          time: true,
+          price: true,
         },
       },
     };
 
-    // 🔧 1. 가격 차트 생성 (X축 틱 제거)
+    // 1. 가격 차트 생성 (X축 틱 제거)
     this.priceChart = LightweightCharts.createChart(priceContainer, {
       ...commonChartConfig,
       height: 280,
       timeScale: {
         borderColor: "rgba(255, 255, 255, 0.1)",
         textColor: "#e0e0e0",
-        visible: false, // 🔧 X축 틱 완전 제거
+        visible: false, // X축 틱 완전 제거
         fixLeftEdge: true,
         fixRightEdge: true,
       },
@@ -329,7 +296,7 @@ export class ChartManager {
     this.priceSeries.setData(candleData);
     this.addIndicatorToMainChart(ma5Data, ma20Data);
 
-    // 🔧 2. 볼륨 차트 생성 (X축 틱만 표시)
+    // 2. 볼륨 차트 생성 (X축 틱만 표시)
     this.volumeChart = LightweightCharts.createChart(volumeContainer, {
       ...commonChartConfig,
       height: 120,
@@ -346,17 +313,15 @@ export class ChartManager {
       rightPriceScale: {
         borderColor: "rgba(255, 255, 255, 0.1)",
         textColor: "#e0e0e0",
-        // 🔧 Y축 자동 스케일링을 위해 scaleMargins 조정
         scaleMargins: {
-          top: 0.1, // 상단 여백
-          bottom: 0, // 하단 여백 제거
+          top: 0.1,
+          bottom: 0,
         },
         entireTextOnly: true,
-        minimumWidth: 80, // 🔧 가격차트와 동일한 Y축 너비
+        minimumWidth: 80,
       },
       localization: {
         timeFormatter: (time) => {
-          // 🔧 커스텀 시간 포매터로 KST 시간 강제 표시
           const date = new Date(time * 1000);
           return date.toLocaleTimeString("ko-KR", {
             timeZone: "Asia/Seoul",
@@ -366,7 +331,6 @@ export class ChartManager {
           });
         },
         dateFormatter: (time) => {
-          // 🔧 커스텀 날짜 포매터로 KST 날짜 강제 표시
           const date = new Date(time * 1000);
           return date.toLocaleDateString("ko-KR", {
             timeZone: "Asia/Seoul",
@@ -381,7 +345,6 @@ export class ChartManager {
       color: "#26a69a",
       priceFormat: {
         type: "volume",
-        // 🔧 볼륨 포맷 개선
         formatter: (volume) => {
           if (volume >= 1000000) {
             return (volume / 1000000).toFixed(1) + "M";
@@ -394,7 +357,7 @@ export class ChartManager {
     });
     this.volumeSeries.setData(volumeData);
 
-    // 🔧 3. 차트 스케일 동기화 (X축 완벽 정렬)
+    // 3. 차트 스케일 동기화 (X축 완벽 정렬)
     this.priceChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
       this.volumeChart.timeScale().setVisibleLogicalRange(range);
     });
@@ -403,7 +366,7 @@ export class ChartManager {
       this.priceChart.timeScale().setVisibleLogicalRange(range);
     });
 
-    // 🔧 4. 크로스헤어 동기화
+    // 4. 크로스헤어 동기화
     this.priceChart.subscribeCrosshairMove((param) => {
       if (param.point) {
         this.volumeChart.setCrosshairPosition(param.point);
@@ -420,14 +383,19 @@ export class ChartManager {
       }
     });
 
-    // 🔧 5. 초기 차트 뷰 설정 및 정렬
-    // 두 차트를 동시에 맞춤
-    this.priceChart.timeScale().fitContent();
-    this.volumeChart.timeScale().fitContent();
+    // 5. 초기 차트 뷰 설정 (오른쪽은 최신 데이터이므로 여유 없음)
+    this.priceChart.timeScale().setVisibleLogicalRange({
+      from: 20, // 100개 데이터 중 처음 20개 숨김 (왼쪽 여유)
+      to: 100, // 마지막까지 표시 (오른쪽 여유 없음)
+    });
+    this.volumeChart.timeScale().setVisibleLogicalRange({
+      from: 20,
+      to: 100,
+    });
 
-    // 반응형 처리
+    // 반응형 처리 및 무한스크롤 설정
     this.setupResponsive();
-    this.setupInfiniteScroll(); // 🆕 추가
+    this.setupInfiniteScroll();
     this.lastCandleData = candleData;
     this.lastVolumeData = volumeData;
   }
@@ -438,7 +406,7 @@ export class ChartManager {
       return;
     }
 
-    // MA5 추가 (데이터가 있는 경우에만)
+    // MA5 추가
     if (Array.isArray(ma5Data) && ma5Data.length > 0) {
       this.indicatorSeries.ma5 = this.priceChart.addLineSeries({
         color: "#FF0000",
@@ -447,10 +415,9 @@ export class ChartManager {
         lastValueVisible: true,
       });
       this.indicatorSeries.ma5.setData(ma5Data);
-      console.log("✅ MA5 추가됨:", ma5Data.length, "개");
     }
 
-    // MA20 추가 (데이터가 있는 경우에만)
+    // MA20 추가
     if (Array.isArray(ma20Data) && ma20Data.length > 0) {
       this.indicatorSeries.ma20 = this.priceChart.addLineSeries({
         color: "#00FF00",
@@ -459,7 +426,6 @@ export class ChartManager {
         lastValueVisible: true,
       });
       this.indicatorSeries.ma20.setData(ma20Data);
-      console.log("✅ MA20 추가됨:", ma20Data.length, "개");
     }
   }
 
@@ -476,36 +442,6 @@ export class ChartManager {
       close: Number(newCandle.trade_price),
     };
     this.priceSeries.update(formattedCandle);
-  }
-
-  // calculateMA 메서드를 다음으로 교체
-  calculateMA(candleData, period) {
-    const ma = [];
-    for (let i = 0; i < candleData.length; i++) {
-      if (i < period - 1) {
-        ma.push(null);
-      } else {
-        let sum = 0;
-        let validCount = 0;
-
-        // 🔧 유효한 데이터만 계산에 포함
-        for (let j = 0; j < period; j++) {
-          const candle = candleData[i - j];
-          if (candle && candle.close && !isNaN(candle.close)) {
-            sum += candle.close;
-            validCount++;
-          }
-        }
-
-        // 🔧 유효한 데이터가 충분하지 않으면 null
-        if (validCount === period) {
-          ma.push(sum / period);
-        } else {
-          ma.push(null);
-        }
-      }
-    }
-    return ma;
   }
 
   setupResponsive() {
@@ -527,14 +463,14 @@ export class ChartManager {
         if (entry.target === priceContainer && this.priceChart) {
           this.priceChart.applyOptions({
             width: Math.max(width, 300),
-            height: Math.max(height, 200), // 🔧 최소 높이도 축소
+            height: Math.max(height, 200),
           });
         }
 
         if (entry.target === volumeContainer && this.volumeChart) {
           this.volumeChart.applyOptions({
             width: Math.max(width, 300),
-            height: Math.max(height, 80), // 🔧 볼륨차트 최소 높이 축소
+            height: Math.max(height, 80),
           });
         }
       });
@@ -542,7 +478,6 @@ export class ChartManager {
 
     resizeObserver.observe(priceContainer);
     resizeObserver.observe(volumeContainer);
-
     this.resizeObserver = resizeObserver;
   }
 
@@ -598,26 +533,88 @@ export class ChartManager {
       }
     }
   }
-  // setupInfiniteScroll 메서드를 다음으로 수정
+
+  // 100개 데이터 기준으로 조정된 무한스크롤
+  // 기존 setupInfiniteScroll() 메서드를 다음으로 교체
   setupInfiniteScroll() {
     if (!this.priceChart) return;
+
+    let failedAttempts = 0;
+    const MAX_FAILED_ATTEMPTS = 3;
+    let lastFailedTimestamp = null;
+    let scrollTimeout; // 디바운싱용
+    let lastTriggeredRange = null; // 마지막 트리거된 범위
 
     this.priceChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
       if (this.isLoadingMore || !range) return;
 
-      // 🔧 왼쪽 끝에 가까워질 때 조건 완화 (더 일찍 로드)
-      const totalRange = range.to - range.from;
-      const leftThreshold = range.from + totalRange * 0.1; // 전체 범위의 10% 지점
+      // 실패 횟수 제한 확인
+      if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
+        return;
+      }
 
-      if (range.from <= 10 || range.from <= leftThreshold) {
-        this.loadMoreHistoricalData();
+      // 트리거 조건 확인 (왼쪽 끝 근처만)
+      const totalRange = range.to - range.from;
+      const leftThreshold = range.from + totalRange * 0.15;
+      const shouldTrigger = range.from <= 5 || range.from <= leftThreshold;
+
+      if (shouldTrigger) {
+        // 디바운싱: 500ms 대기 후 실행
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+          // 이미 비슷한 범위에서 트리거됐는지 확인
+          if (
+            lastTriggeredRange &&
+            Math.abs(range.from - lastTriggeredRange.from) < 2
+          ) {
+            console.log("중복 트리거 방지 - 비슷한 범위에서 이미 실행됨");
+            return;
+          }
+
+          console.log("무한스크롤 트리거 - range.from:", range.from);
+          lastTriggeredRange = { ...range }; // 현재 범위 저장
+
+          this.loadMoreHistoricalData()
+            .then((success) => {
+              if (success) {
+                failedAttempts = 0;
+                lastFailedTimestamp = null;
+              } else {
+                failedAttempts++;
+                lastFailedTimestamp = Date.now();
+                console.warn(
+                  `무한스크롤 실패 횟수: ${failedAttempts}/${MAX_FAILED_ATTEMPTS}`
+                );
+              }
+            })
+            .catch((error) => {
+              failedAttempts++;
+              lastFailedTimestamp = Date.now();
+              console.error(
+                `무한스크롤 오류 (${failedAttempts}/${MAX_FAILED_ATTEMPTS}):`,
+                error
+              );
+            });
+        }, 500); // 500ms 디바운싱
       }
     });
+
+    // 실패 카운터 리셋 (60초 후)
+    setInterval(() => {
+      if (failedAttempts >= MAX_FAILED_ATTEMPTS && lastFailedTimestamp) {
+        const timeSinceLastFail = Date.now() - lastFailedTimestamp;
+        if (timeSinceLastFail > 60000) {
+          console.log("무한스크롤 재시도 허용 (60초 경과)");
+          failedAttempts = 0;
+          lastFailedTimestamp = null;
+          lastTriggeredRange = null; // 범위도 리셋
+        }
+      }
+    }, 10000);
   }
 
-  // loadMoreHistoricalData 메서드를 다음으로 교체
   async loadMoreHistoricalData() {
-    if (this.isLoadingMore || this.allCandleData.length === 0) return;
+    if (this.isLoadingMore || this.allCandleData.length === 0) return false;
 
     this.isLoadingMore = true;
     console.log("📈 추가 히스토리 데이터 로딩...");
@@ -628,11 +625,10 @@ export class ChartManager {
 
       if (!to) {
         console.warn("⚠️ candle_date_time_utc가 없어서 추가 로딩 중단");
-        return;
+        return false;
       }
 
-      // 🔧 캐시 키 생성 (to 파라미터 포함)
-      const cacheKey = `${this.state.activeCoin}-${this.state.activeUnit}-${to}`;
+      // 캐시 확인
       const cachedData = this.cacheManager.get(
         this.state.activeCoin,
         `${this.state.activeUnit}-${to}`
@@ -641,33 +637,35 @@ export class ChartManager {
       let newData;
 
       if (cachedData) {
-        console.log("📦 캐시된 히스토리 데이터 사용:", cacheKey);
+        console.log("📦 캐시된 히스토리 데이터 사용");
         newData = cachedData;
       } else {
-        console.log("📅 기준 시간:", to);
-
         const response = await fetch(
           `/api/candles?unit=${this.state.activeUnit}&market=${
             this.state.activeCoin
-          }&count=200&to=${encodeURIComponent(to)}`
+          }&count=100&to=${encodeURIComponent(to)}`
         );
 
         if (!response.ok) {
-          const errorText = await response.text();
-          console.error("❌ API 응답 오류:", response.status, errorText);
-          return;
+          console.error("❌ API 응답 오류:", response.status);
+
+          // 500 에러 시 더 이상 시도하지 않음
+          if (response.status === 500) {
+            console.log("⚠️ 서버 오류로 인해 추가 로딩을 중단합니다.");
+            return false;
+          }
+          return false;
         }
 
         newData = await response.json();
 
-        // 🔧 히스토리 데이터도 캐시에 저장
+        // 히스토리 데이터 캐시 저장
         if (newData && newData.length > 0) {
           this.cacheManager.set(
             this.state.activeCoin,
             `${this.state.activeUnit}-${to}`,
             newData
           );
-          console.log("💾 히스토리 데이터 캐시 저장:", cacheKey);
         }
       }
 
@@ -685,22 +683,24 @@ export class ChartManager {
         if (filteredNewData.length > 0) {
           this.allCandleData.push(...filteredNewData);
           console.log(`📊 추가 데이터 ${filteredNewData.length}개 로드됨`);
-
           this.appendHistoricalData(filteredNewData);
+          return true; // 성공
         } else {
           console.log("📭 새로운 데이터가 없습니다 (모두 중복)");
+          return false; // 중복 데이터로 인한 실패
         }
       } else {
         console.log("📭 더 이상 가져올 데이터가 없습니다");
+        return false; // 데이터 없음으로 인한 실패
       }
     } catch (error) {
       console.error("❌ 추가 데이터 로딩 실패:", error);
+      return false; // 에러로 인한 실패
     } finally {
-      this.isLoadingMore = false;
+      this.isLoadingMore = false; // 항상 리셋
     }
   }
 
-  // 🔧 새 메서드 추가 (loadMoreHistoricalData 다음에)
   appendHistoricalData(newData) {
     // 새 데이터 처리
     const sortedNewData = newData.reverse();
@@ -756,19 +756,15 @@ export class ChartManager {
     newCandleData.sort((a, b) => a.time - b.time);
     newVolumeData.sort((a, b) => a.time - b.time);
 
-    // 🔧 기존 데이터에 새 데이터 추가 (차트 재렌더링 없이)
+    // 기존 데이터에 새 데이터 추가
     if (this.priceSeries && newCandleData.length > 0) {
-      // 기존 데이터 가져오기
       const existingData = this.lastCandleData || [];
       const combinedData = [...newCandleData, ...existingData];
-
-      // 전체 데이터로 업데이트
       this.priceSeries.setData(combinedData);
       this.lastCandleData = combinedData;
     }
 
     if (this.volumeSeries && newVolumeData.length > 0) {
-      // 볼륨 데이터도 동일하게 처리
       this.volumeSeries.setData([
         ...newVolumeData,
         ...(this.lastVolumeData || []),
