@@ -56,7 +56,7 @@ export class ChartManager {
   processAndRenderData(data) {
     this.allCandleData = [...data];
 
-    // 🔧 캔들 데이터를 캐시에 등록
+    // 캔들 데이터를 캐시에 등록
     this.cacheManager.addCandles(
       this.state.activeCoin,
       this.state.activeUnit,
@@ -74,7 +74,7 @@ export class ChartManager {
 
       // 필수 필드 존재 확인
       if (!d || !d.candle_date_time_kst) {
-        console.warn("⚠️ 데이터 누락:", i, d);
+        console.warn("데이터 누락:", i, d);
         continue;
       }
 
@@ -86,11 +86,11 @@ export class ChartManager {
         timeValue = kstDate.getTime();
 
         if (isNaN(timeValue)) {
-          console.warn("⚠️ 잘못된 시간:", kstTimeString);
+          console.warn("잘못된 시간:", kstTimeString);
           continue;
         }
       } catch (error) {
-        console.warn("⚠️ 시간 파싱 오류:", d.candle_date_time_kst, error);
+        console.warn("시간 파싱 오류:", d.candle_date_time_kst, error);
         continue;
       }
 
@@ -102,7 +102,7 @@ export class ChartManager {
       const oneYearLater = currentTime + 365 * 24 * 60 * 60;
 
       if (time < oneYearAgo || time > oneYearLater) {
-        console.warn("⚠️ 비정상적인 시간 값:", time, new Date(time * 1000));
+        console.warn("비정상적인 시간 값:", time, new Date(time * 1000));
         continue;
       }
 
@@ -124,13 +124,13 @@ export class ChartManager {
         low <= 0 ||
         close <= 0
       ) {
-        console.warn("⚠️ 잘못된 OHLC 값:", { open, high, low, close });
+        console.warn("잘못된 OHLC 값:", { open, high, low, close });
         continue;
       }
 
       // OHLC 논리 검증
       if (high < Math.max(open, close) || low > Math.min(open, close)) {
-        console.warn("⚠️ OHLC 논리 오류:", { open, high, low, close });
+        console.warn("OHLC 논리 오류:", { open, high, low, close });
         continue;
       }
 
@@ -144,7 +144,7 @@ export class ChartManager {
       });
     }
 
-    console.log(`✅ 유효한 데이터: ${candleData.length}/${sortedData.length}`);
+    console.log(`유효한 데이터: ${candleData.length}/${sortedData.length}`);
 
     // 시간 순 정렬
     candleData.sort((a, b) => a.time - b.time);
@@ -152,7 +152,7 @@ export class ChartManager {
 
     // 최소 데이터 개수 확인
     if (candleData.length < 5) {
-      console.error("❌ 유효한 데이터가 너무 적습니다:", candleData.length);
+      console.error("유효한 데이터가 너무 적습니다:", candleData.length);
       return;
     }
 
@@ -160,8 +160,8 @@ export class ChartManager {
     const ma5Data = this.calculateSafeMA(candleData, 5);
     const ma20Data = this.calculateSafeMA(candleData, 20);
 
-    console.log("📊 차트 렌더링 시작");
-    this.renderCharts(candleData, volumeData, ma5Data, ma20Data);
+    console.log("차트 렌더링 시작");
+    this.renderCharts(candleData, volumeData);
   }
 
   calculateSafeMA(candleData, period) {
@@ -198,15 +198,15 @@ export class ChartManager {
     return result;
   }
 
-  renderCharts(candleData, volumeData, ma5Data, ma20Data) {
+  renderCharts(candleData, volumeData) {
     // 데이터 유효성 최종 검사
     if (!Array.isArray(candleData) || candleData.length === 0) {
-      console.error("❌ 캔들 데이터 없음");
+      console.error("캔들 데이터 없음");
       return;
     }
 
     if (!Array.isArray(volumeData) || volumeData.length === 0) {
-      console.error("❌ 볼륨 데이터 없음");
+      console.error("볼륨 데이터 없음");
       return;
     }
 
@@ -301,6 +301,8 @@ export class ChartManager {
         precision: 0,
         minMove: 1,
       },
+      lastValueVisible: false, // 마지막 가격 숨김
+      priceLineVisible: false, // 가격선 숨김
     });
     this.priceSeries.setData(candleData);
 
@@ -319,12 +321,45 @@ export class ChartManager {
         fixRightEdge: true,
         tickMarkFormatter: (time) => {
           const date = new Date(time * 1000);
-          return date.toLocaleTimeString("ko-KR", {
-            timeZone: "Asia/Seoul",
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: false,
-          });
+
+          // 시간단위에 따른 포맷 변경
+          if (this.state.activeUnit === "1D") {
+            // 일봉: 6일 간격으로 표시, 달 바뀌는 곳에 영문월
+            const day = date.getDate();
+            const isMonthBoundary = day <= 6; // 월 초인지 확인
+
+            if (isMonthBoundary) {
+              return date.toLocaleDateString("en-US", {
+                timeZone: "Asia/Seoul",
+                month: "short", // Sep, Oct, Nov
+                day: "numeric",
+              });
+            } else {
+              return day.toString(); // 10, 16, 22, 28
+            }
+          } else if (this.state.activeUnit === "240") {
+            // 4시간봉: 2일 간격으로 표시, 달 바뀌는 곳에 영문월
+            const day = date.getDate();
+            const isMonthBoundary = day <= 2; // 월 초 2일 이내
+
+            if (isMonthBoundary) {
+              return date.toLocaleDateString("en-US", {
+                timeZone: "Asia/Seoul",
+                month: "short", // Sep, Oct
+                day: "numeric",
+              });
+            } else {
+              return day.toString(); // 10, 12, 14, 16
+            }
+          } else {
+            // 분봉: 기존대로 시:분
+            return date.toLocaleTimeString("ko-KR", {
+              timeZone: "Asia/Seoul",
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+            });
+          }
         },
       },
       rightPriceScale: {
@@ -338,14 +373,21 @@ export class ChartManager {
         minimumWidth: 80,
       },
       localization: {
+        // 크로스헤어 라벨 포맷 변경 (yy.mm.dd.hh:mm)
         timeFormatter: (time) => {
           const date = new Date(time * 1000);
-          return date.toLocaleTimeString("ko-KR", {
-            timeZone: "Asia/Seoul",
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: false,
-          });
+          return date
+            .toLocaleDateString("ko-KR", {
+              timeZone: "Asia/Seoul",
+              year: "2-digit",
+              month: "2-digit",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+            })
+            .replace(/\//g, ".")
+            .replace(", ", ".");
         },
         dateFormatter: (time) => {
           const date = new Date(time * 1000);
@@ -374,6 +416,19 @@ export class ChartManager {
     });
     this.volumeSeries.setData(volumeData);
 
+    // 시간단위별 틱 간격 조정
+    if (this.state.activeUnit === "240") {
+      // 4시간봉
+      this.volumeChart.timeScale().applyOptions({
+        barSpacing: 12, // 틱 간격 늘리기 (2일씩)
+      });
+    } else if (this.state.activeUnit === "1D") {
+      // 1일봉
+      this.volumeChart.timeScale().applyOptions({
+        barSpacing: 18, // 틱 간격 더 늘리기 (6일씩)
+      });
+    }
+
     // 3. 차트 스케일 동기화 (X축 완벽 정렬)
     this.priceChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
       this.volumeChart.timeScale().setVisibleLogicalRange(range);
@@ -383,10 +438,15 @@ export class ChartManager {
       this.priceChart.timeScale().setVisibleLogicalRange(range);
     });
 
-    // 4. 크로스헤어 동기화
+    // 4. 개선된 크로스헤어 동기화 (양방향 동기화)
     this.priceChart.subscribeCrosshairMove((param) => {
       if (param.point) {
-        this.volumeChart.setCrosshairPosition(param.point);
+        // 가격 차트의 크로스헤어를 볼륨 차트에 동기화
+        const point = {
+          x: param.point.x,
+          y: volumeContainer.clientHeight / 2, // 볼륨 차트 중앙에 표시
+        };
+        this.volumeChart.setCrosshairPosition(point.x, point.y);
       } else {
         this.volumeChart.clearCrosshairPosition();
       }
@@ -394,7 +454,12 @@ export class ChartManager {
 
     this.volumeChart.subscribeCrosshairMove((param) => {
       if (param.point) {
-        this.priceChart.setCrosshairPosition(param.point);
+        // 볼륨 차트의 크로스헤어를 가격 차트에 동기화
+        const point = {
+          x: param.point.x,
+          y: priceContainer.clientHeight / 2, // 가격 차트 중앙에 표시
+        };
+        this.priceChart.setCrosshairPosition(point.x, point.y);
       } else {
         this.priceChart.clearCrosshairPosition();
       }
@@ -419,7 +484,7 @@ export class ChartManager {
 
   addIndicatorToMainChart(ma5Data, ma20Data) {
     if (!this.priceChart) {
-      console.warn("⚠️ 가격 차트가 없어서 지표 추가 불가");
+      console.warn("가격 차트가 없어서 지표 추가 불가");
       return;
     }
 
@@ -520,6 +585,7 @@ export class ChartManager {
     const now = new Date();
     const currentMinute = now.getMinutes();
     const currentHour = now.getHours();
+    let shouldUpdate = false;
 
     if (this.state.activeUnit === "1D") {
       if (
@@ -527,90 +593,71 @@ export class ChartManager {
         currentMinute === 0 &&
         this.state.lastUpdateTime !== "1D-updated"
       ) {
-        this.fetchAndRender();
+        shouldUpdate = true;
         this.state.lastUpdateTime = "1D-updated";
       } else if (currentHour !== 0 || currentMinute !== 0) {
         this.state.lastUpdateTime = null;
       }
     } else {
       const unitInMinutes = parseInt(this.state.activeUnit);
-      if (unitInMinutes) {
-        const isUpdateMinute = currentMinute % unitInMinutes === 0;
+      if (unitInMinutes && currentMinute % unitInMinutes === 0) {
         const lastUpdateString = `${this.state.activeUnit}-${currentHour}:${currentMinute}`;
-        if (
-          isUpdateMinute &&
-          now.getSeconds() === 0 &&
-          this.state.lastUpdateTime !== lastUpdateString
-        ) {
-          this.fetchAndRender();
+        if (this.state.lastUpdateTime !== lastUpdateString) {
+          shouldUpdate = true;
           this.state.lastUpdateTime = lastUpdateString;
-        } else if (!isUpdateMinute) {
-          this.state.lastUpdateTime = null;
         }
       }
     }
+
+    if (shouldUpdate) {
+      console.log("차트 업데이트 실행!");
+      this.fetchAndRender();
+    }
   }
 
-  // 100개 데이터 기준으로 조정된 무한스크롤
-  // 기존 setupInfiniteScroll() 메서드를 다음으로 교체
   setupInfiniteScroll() {
     if (!this.priceChart) return;
 
-    let scrollTimeout; // 디바운싱 타이머를 위한 변수
+    let scrollTimeout;
 
     this.priceChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-      if (!range) return;
+      if (!range || this.isLoadingMore || range.from > 80) return;
 
-      // 트리거 조건 확인 (왼쪽 끝 근처)
-      const shouldTrigger = range.from <= 80;
+      clearTimeout(scrollTimeout);
 
-      if (shouldTrigger) {
-        // 기존 타이머를 제거하여 마지막 이벤트만 남김
-        clearTimeout(scrollTimeout);
-
-        // 400ms 후에 데이터 로딩 함수 실행
-        scrollTimeout = setTimeout(() => {
-          console.log("무한스크롤 트리거 - range.from:", range.from);
-          this.loadMoreHistoricalData()
-            .then((success) => {
-              if (success) {
-                console.log("추가 데이터 로딩 성공");
-              } else {
-                console.warn("추가 데이터가 없습니다.");
-              }
-            })
-            .catch((error) => {
-              console.error("무한스크롤 오류:", error);
-            });
-        }, 400); // 디바운싱 시간 (400ms)
-      }
+      scrollTimeout = setTimeout(() => {
+        console.log("무한스크롤 트리거 - range.from:", range.from);
+        this.loadMoreHistoricalData()
+          .then((success) => {
+            if (success) {
+              console.log("추가 데이터 차트에 적용 완료");
+            } else {
+              console.warn("추가 데이터가 없습니다.");
+            }
+          })
+          .catch((error) => {
+            console.error("무한스크롤 오류:", error);
+          });
+      }, 400);
     });
   }
-
-  // chart-manager.js의 loadMoreHistoricalData 메서드만 수정
 
   async loadMoreHistoricalData() {
     if (this.isLoadingMore || this.allCandleData.length === 0) return false;
 
     this.isLoadingMore = true;
-    console.log("📈 추가 히스토리 데이터 로딩...");
+    console.log("추가 히스토리 데이터 로딩...");
 
     try {
-      // 🔧 기존 코드 (겹치는 요청)
-      // const oldestCandle = this.allCandleData[this.allCandleData.length - 1];
-      // const to = oldestCandle?.candle_date_time_utc;
-
-      // 🔧 새 코드 (연속된 구간 요청)
       const to = this.calculateNonOverlappingTime(this.allCandleData);
 
       if (!to) {
-        console.warn("⚠️ 시간 계산 실패로 추가 로딩 중단");
+        console.warn("시간 계산 실패로 추가 로딩 중단");
         return false;
       }
 
-      console.log(`🕐 연속 구간 요청: ${to}`);
+      console.log("연속 구간 요청:", to);
 
-      // 나머지 코드는 동일...
       const response = await fetch(
         `/api/candles?unit=${this.state.activeUnit}&market=${
           this.state.activeCoin
@@ -618,9 +665,9 @@ export class ChartManager {
       );
 
       if (!response.ok) {
-        console.error("❌ API 응답 오류:", response.status);
+        console.error("API 응답 오류:", response.status);
         if (response.status === 500) {
-          console.log("⚠️ 서버 오류로 인해 추가 로딩을 중단합니다.");
+          console.log("서버 오류로 인해 추가 로딩을 중단합니다.");
           return false;
         }
         return false;
@@ -629,11 +676,10 @@ export class ChartManager {
       const apiData = await response.json();
 
       if (!apiData || apiData.length === 0) {
-        console.log("📭 더 이상 가져올 데이터가 없습니다");
+        console.log("더 이상 가져올 데이터가 없습니다");
         return false;
       }
 
-      // 스마트 캐싱: 캐시된 데이터와 새 데이터 분석
       const smartResult = this.cacheManager.getHistoryDataSmart(
         this.state.activeCoin,
         this.state.activeUnit,
@@ -642,18 +688,15 @@ export class ChartManager {
 
       let finalData = [];
 
-      // 캐시된 데이터가 있으면 사용
       if (smartResult.cached.length > 0) {
-        console.log(`📦 캔들 캐시 활용: ${smartResult.cached.length}개`);
+        console.log("캔들 캐시 활용:", smartResult.cached.length + "개");
         finalData.push(...smartResult.cached);
       }
 
-      // 새로운 데이터가 있으면 추가
       if (smartResult.missing.length > 0) {
-        console.log(`🌐 새 데이터 추가: ${smartResult.missing.length}개`);
+        console.log("새 데이터 추가:", smartResult.missing.length + "개");
         finalData.push(...smartResult.missing);
 
-        // 새 데이터를 캐시에 등록
         this.cacheManager.addCandles(
           this.state.activeCoin,
           this.state.activeUnit,
@@ -661,15 +704,13 @@ export class ChartManager {
         );
       }
 
-      // API에서 가져온 모든 데이터가 캐시에 있었던 경우
       if (
         smartResult.missing.length === 0 &&
         smartResult.cached.length === apiData.length
       ) {
-        console.log("🎯 완전 캐시 히트! API 데이터를 100% 캐시에서 제공");
+        console.log("완전 캐시 히트! API 데이터를 100% 캐시에서 제공");
       }
 
-      // 중복 제거 후 데이터 병합 (기존 allCandleData와 비교)
       const filteredNewData = finalData.filter(
         (newCandle) =>
           !this.allCandleData.find(
@@ -682,19 +723,22 @@ export class ChartManager {
       if (filteredNewData.length > 0) {
         this.allCandleData.push(...filteredNewData);
         console.log(
-          `📊 최종 추가 데이터: ${filteredNewData.length}개 (캐시 활용률: ${(
+          "최종 추가 데이터:",
+          filteredNewData.length + "개",
+          "(캐시 활용률:",
+          (
             ((apiData.length - smartResult.missing.length) / apiData.length) *
             100
-          ).toFixed(1)}%)`
+          ).toFixed(1) + "%)"
         );
         this.appendHistoricalData(filteredNewData);
         return true;
       } else {
-        console.log("📭 새로운 데이터가 없습니다 (모두 중복)");
+        console.log("새로운 데이터가 없습니다 (모두 중복)");
         return false;
       }
     } catch (error) {
-      console.error("❌ 추가 데이터 로딩 실패:", error);
+      console.error("추가 데이터 로딩 실패:", error);
       return false;
     } finally {
       this.isLoadingMore = false;
@@ -702,7 +746,6 @@ export class ChartManager {
   }
 
   appendHistoricalData(newData) {
-    // 새 데이터 처리
     const sortedNewData = newData.reverse();
     const newCandleData = [];
     const newVolumeData = [];
@@ -752,11 +795,9 @@ export class ChartManager {
       });
     }
 
-    // 시간 순 정렬
     newCandleData.sort((a, b) => a.time - b.time);
     newVolumeData.sort((a, b) => a.time - b.time);
 
-    // 기존 데이터에 새 데이터 추가
     if (this.priceSeries && newCandleData.length > 0) {
       const existingData = this.lastCandleData || [];
       const combinedData = [...newCandleData, ...existingData];
@@ -771,45 +812,30 @@ export class ChartManager {
       ]);
       this.lastVolumeData = [...newVolumeData, ...(this.lastVolumeData || [])];
     }
-
-    console.log("✅ 추가 데이터 차트에 적용 완료");
   }
 
   calculateNonOverlappingTime(allCandleData) {
     if (!allCandleData || allCandleData.length === 0) return null;
 
-    // 현재 가진 데이터의 가장 오래된 캔들 찾기
     const oldestCandle = allCandleData[allCandleData.length - 1];
     if (!oldestCandle?.candle_date_time_utc) return null;
 
     try {
       const oldestTime = new Date(oldestCandle.candle_date_time_utc);
 
-      // 시간 단위에 따라 이전 시점 계산
       let targetTime;
 
       if (this.state.activeUnit === "1D") {
-        // 1일봉: 1일 전
         targetTime = new Date(oldestTime.getTime() - 24 * 60 * 60 * 1000);
       } else {
-        // 분봉: activeUnit 분만큼 전
         const minutes = parseInt(this.state.activeUnit);
         targetTime = new Date(oldestTime.getTime() - minutes * 60 * 1000);
       }
 
-      // UTC 형식으로 반환
       return targetTime.toISOString();
     } catch (error) {
       console.error("시간 계산 오류:", error);
-      return oldestCandle.candle_date_time_utc; // 실패 시 기존 방식
-    }
-  }
-  removeMovingAverage(period) {
-    const key = `ma${period}`;
-    if (this.indicatorSeries[key]) {
-      this.priceChart.removeSeries(this.indicatorSeries[key]);
-      delete this.indicatorSeries[key];
-      console.log(`MA${period} 제거됨`);
+      return oldestCandle.candle_date_time_utc;
     }
   }
 
@@ -821,18 +847,17 @@ export class ChartManager {
 
     const key = `ma${period}`;
 
-    // 이미 있으면 제거 후 재추가
     if (this.indicatorSeries[key]) {
       this.priceChart.removeSeries(this.indicatorSeries[key]);
     }
 
     const colors = {
-      5: "#FF6B6B", // 빨강
-      10: "#4ECDC4", // 청록
-      20: "#45B7D1", // 파랑
-      50: "#96CEB4", // 초록
-      100: "#FFEAA7", // 노랑
-      200: "#DDA0DD", // 보라
+      5: "#FF6B6B",
+      10: "#4ECDC4",
+      20: "#45B7D1",
+      50: "#96CEB4",
+      100: "#FFEAA7",
+      200: "#DDA0DD",
     };
 
     const maSeries = this.priceChart.addLineSeries({
@@ -842,7 +867,6 @@ export class ChartManager {
       lastValueVisible: true,
     });
 
-    // MA 데이터 계산 및 적용
     const maData = this.calculateSafeMA(this.lastCandleData, period);
     if (maData.length > 0) {
       maSeries.setData(maData);
@@ -853,7 +877,6 @@ export class ChartManager {
     return maSeries;
   }
 
-  // 이동평균선 제거
   removeMovingAverage(period) {
     const key = `ma${period}`;
     if (this.indicatorSeries[key]) {
@@ -865,18 +888,14 @@ export class ChartManager {
     return false;
   }
 
-  // 보조지표 추가 (기존 addIndicator 개선)
   addIndicator(type) {
     if (!this.priceChart) return null;
 
-    // 이미 있으면 제거 후 재추가
     if (this.indicatorSeries[type]) {
       this.priceChart.removeSeries(this.indicatorSeries[type]);
     }
 
-    // RSI 예시 (다른 지표들도 비슷하게 구현)
     if (type === "RSI") {
-      // RSI 계산 로직 (간단한 예시)
       const rsiSeries = this.priceChart.addLineSeries({
         color: "#FFA500",
         lineWidth: 2,
@@ -889,11 +908,9 @@ export class ChartManager {
       return rsiSeries;
     }
 
-    // 다른 지표들...
     return null;
   }
 
-  // 보조지표 제거
   removeIndicator(type) {
     if (this.indicatorSeries[type]) {
       this.priceChart.removeSeries(this.indicatorSeries[type]);
@@ -904,7 +921,6 @@ export class ChartManager {
     return false;
   }
 
-  // 모든 지표 제거
   clearAllIndicators() {
     Object.keys(this.indicatorSeries).forEach((key) => {
       if (this.indicatorSeries[key]) {

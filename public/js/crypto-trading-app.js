@@ -83,7 +83,7 @@ export class CryptoTradingApp {
   startPeriodicUpdates() {
     setInterval(() => {
       this.chartManager.checkAutoUpdate();
-    }, 5000);
+    }, 10000);
 
     setInterval(async () => {
       await this.tradingManager.fetchUserBalance();

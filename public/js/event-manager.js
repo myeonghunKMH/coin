@@ -111,6 +111,16 @@ export class EventManager {
         this.chart.fetchAndRender();
       }
     });
+    const timeframeSelect = document.getElementById("timeframe-select");
+    timeframeSelect?.addEventListener("change", (e) => {
+      const selectedUnit = e.target.value;
+      console.log(
+        `⏰ 시간단위 변경: ${this.state.activeUnit} → ${selectedUnit}`
+      );
+
+      this.state.activeUnit = selectedUnit;
+      this.chart.fetchAndRender();
+    });
   }
 
   setupTradingEvents() {
