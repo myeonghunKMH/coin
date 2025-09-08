@@ -55,6 +55,14 @@ export class ChartManager {
 
   processAndRenderData(data) {
     this.allCandleData = [...data];
+
+    // 🔧 캔들 데이터를 캐시에 등록
+    this.cacheManager.addCandles(
+      this.state.activeCoin,
+      this.state.activeUnit,
+      data
+    );
+
     const sortedData = data.reverse();
 
     // 데이터 검증 및 변환
@@ -555,12 +563,10 @@ export class ChartManager {
       }
 
       // 트리거 조건 확인 (왼쪽 끝 근처만)
-      const totalRange = range.to - range.from;
-      const leftThreshold = range.from + totalRange * 0.15;
-      const shouldTrigger = range.from <= 5 || range.from <= leftThreshold;
+      const shouldTrigger = range.from <= 80;
 
       if (shouldTrigger) {
-        // 디바운싱: 500ms 대기 후 실행
+        // 디바운싱: 1000ms 대기 후 실행
         clearTimeout(scrollTimeout);
         scrollTimeout = setTimeout(() => {
           // 이미 비슷한 범위에서 트리거됐는지 확인
@@ -596,7 +602,7 @@ export class ChartManager {
                 error
               );
             });
-        }, 500); // 500ms 디바운싱
+        }, 400); // 400ms 디바운싱
       }
     });
 
@@ -614,6 +620,8 @@ export class ChartManager {
     }, 10000);
   }
 
+  // chart-manager.js의 loadMoreHistoricalData 메서드만 수정
+
   async loadMoreHistoricalData() {
     if (this.isLoadingMore || this.allCandleData.length === 0) return false;
 
@@ -621,86 +629,108 @@ export class ChartManager {
     console.log("📈 추가 히스토리 데이터 로딩...");
 
     try {
-      const oldestCandle = this.allCandleData[this.allCandleData.length - 1];
-      const to = oldestCandle?.candle_date_time_utc;
+      // 🔧 기존 코드 (겹치는 요청)
+      // const oldestCandle = this.allCandleData[this.allCandleData.length - 1];
+      // const to = oldestCandle?.candle_date_time_utc;
+
+      // 🔧 새 코드 (연속된 구간 요청)
+      const to = this.calculateNonOverlappingTime(this.allCandleData);
 
       if (!to) {
-        console.warn("⚠️ candle_date_time_utc가 없어서 추가 로딩 중단");
+        console.warn("⚠️ 시간 계산 실패로 추가 로딩 중단");
         return false;
       }
 
-      // 캐시 확인
-      const cachedData = this.cacheManager.get(
-        this.state.activeCoin,
-        this.state.activeUnit,
-        to
+      console.log(`🕐 연속 구간 요청: ${to}`);
+
+      // 나머지 코드는 동일...
+      const response = await fetch(
+        `/api/candles?unit=${this.state.activeUnit}&market=${
+          this.state.activeCoin
+        }&count=100&to=${encodeURIComponent(to)}`
       );
 
-      let newData;
-
-      if (cachedData) {
-        console.log("📦 캐시된 히스토리 데이터 사용");
-        newData = cachedData;
-      } else {
-        const response = await fetch(
-          `/api/candles?unit=${this.state.activeUnit}&market=${
-            this.state.activeCoin
-          }&count=100&to=${encodeURIComponent(to)}`
-        );
-
-        if (!response.ok) {
-          console.error("❌ API 응답 오류:", response.status);
-
-          // 500 에러 시 더 이상 시도하지 않음
-          if (response.status === 500) {
-            console.log("⚠️ 서버 오류로 인해 추가 로딩을 중단합니다.");
-            return false;
-          }
+      if (!response.ok) {
+        console.error("❌ API 응답 오류:", response.status);
+        if (response.status === 500) {
+          console.log("⚠️ 서버 오류로 인해 추가 로딩을 중단합니다.");
           return false;
         }
-
-        newData = await response.json();
-
-        // 히스토리 데이터 캐시 저장
-        if (newData && newData.length > 0) {
-          this.cacheManager.set(
-            this.state.activeCoin,
-            this.state.activeUnit,
-            newData,
-            to
-          );
-        }
+        return false;
       }
 
-      if (newData && newData.length > 0) {
-        // 중복 제거 후 데이터 병합
-        const filteredNewData = newData.filter(
-          (newCandle) =>
-            !this.allCandleData.find(
-              (existingCandle) =>
-                existingCandle.candle_date_time_utc ===
-                newCandle.candle_date_time_utc
-            )
-        );
+      const apiData = await response.json();
 
-        if (filteredNewData.length > 0) {
-          this.allCandleData.push(...filteredNewData);
-          console.log(`📊 추가 데이터 ${filteredNewData.length}개 로드됨`);
-          this.appendHistoricalData(filteredNewData);
-          return true; // 성공
-        } else {
-          console.log("📭 새로운 데이터가 없습니다 (모두 중복)");
-          return false; // 중복 데이터로 인한 실패
-        }
-      } else {
+      if (!apiData || apiData.length === 0) {
         console.log("📭 더 이상 가져올 데이터가 없습니다");
-        return false; // 데이터 없음으로 인한 실패
+        return false;
+      }
+
+      // 스마트 캐싱: 캐시된 데이터와 새 데이터 분석
+      const smartResult = this.cacheManager.getHistoryDataSmart(
+        this.state.activeCoin,
+        this.state.activeUnit,
+        apiData
+      );
+
+      let finalData = [];
+
+      // 캐시된 데이터가 있으면 사용
+      if (smartResult.cached.length > 0) {
+        console.log(`📦 캔들 캐시 활용: ${smartResult.cached.length}개`);
+        finalData.push(...smartResult.cached);
+      }
+
+      // 새로운 데이터가 있으면 추가
+      if (smartResult.missing.length > 0) {
+        console.log(`🌐 새 데이터 추가: ${smartResult.missing.length}개`);
+        finalData.push(...smartResult.missing);
+
+        // 새 데이터를 캐시에 등록
+        this.cacheManager.addCandles(
+          this.state.activeCoin,
+          this.state.activeUnit,
+          smartResult.missing
+        );
+      }
+
+      // API에서 가져온 모든 데이터가 캐시에 있었던 경우
+      if (
+        smartResult.missing.length === 0 &&
+        smartResult.cached.length === apiData.length
+      ) {
+        console.log("🎯 완전 캐시 히트! API 데이터를 100% 캐시에서 제공");
+      }
+
+      // 중복 제거 후 데이터 병합 (기존 allCandleData와 비교)
+      const filteredNewData = finalData.filter(
+        (newCandle) =>
+          !this.allCandleData.find(
+            (existingCandle) =>
+              existingCandle.candle_date_time_utc ===
+              newCandle.candle_date_time_utc
+          )
+      );
+
+      if (filteredNewData.length > 0) {
+        this.allCandleData.push(...filteredNewData);
+        console.log(
+          `📊 최종 추가 데이터: ${filteredNewData.length}개 (캐시 활용률: ${(
+            ((apiData.length - smartResult.missing.length) / apiData.length) *
+            100
+          ).toFixed(1)}%)`
+        );
+        this.appendHistoricalData(filteredNewData);
+        return true;
+      } else {
+        console.log("📭 새로운 데이터가 없습니다 (모두 중복)");
+        return false;
       }
     } catch (error) {
       console.error("❌ 추가 데이터 로딩 실패:", error);
-      return false; // 에러로 인한 실패
+      return false;
     } finally {
-      this.isLoadingMore = false; // 항상 리셋
+      this.isLoadingMore = false;
     }
   }
 
@@ -776,5 +806,35 @@ export class ChartManager {
     }
 
     console.log("✅ 추가 데이터 차트에 적용 완료");
+  }
+
+  calculateNonOverlappingTime(allCandleData) {
+    if (!allCandleData || allCandleData.length === 0) return null;
+
+    // 현재 가진 데이터의 가장 오래된 캔들 찾기
+    const oldestCandle = allCandleData[allCandleData.length - 1];
+    if (!oldestCandle?.candle_date_time_utc) return null;
+
+    try {
+      const oldestTime = new Date(oldestCandle.candle_date_time_utc);
+
+      // 시간 단위에 따라 이전 시점 계산
+      let targetTime;
+
+      if (this.state.activeUnit === "1D") {
+        // 1일봉: 1일 전
+        targetTime = new Date(oldestTime.getTime() - 24 * 60 * 60 * 1000);
+      } else {
+        // 분봉: activeUnit 분만큼 전
+        const minutes = parseInt(this.state.activeUnit);
+        targetTime = new Date(oldestTime.getTime() - minutes * 60 * 1000);
+      }
+
+      // UTC 형식으로 반환
+      return targetTime.toISOString();
+    } catch (error) {
+      console.error("시간 계산 오류:", error);
+      return oldestCandle.candle_date_time_utc; // 실패 시 기존 방식
+    }
   }
 }
