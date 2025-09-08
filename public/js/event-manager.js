@@ -1,4 +1,4 @@
-// event-manager.js - 최종 수정된 버전
+// event-manager.js - 드롭다운 이벤트 추가된 버전
 
 import { Utils } from "./utils.js";
 
@@ -19,6 +19,7 @@ export class EventManager {
     this.setupButtonEvents();
     this.setupTradeHistoryTabEvents();
     this.setupOrderListButtonEvents();
+    this.setupDropdownEvents(); // 🔧 드롭다운 이벤트 추가
   }
 
   setupTradeHistoryTabEvents() {
@@ -291,6 +292,126 @@ export class EventManager {
           }
         });
       });
+  }
+
+  // 🔧 새로운 드롭다운 이벤트 설정
+  setupDropdownEvents() {
+    // 이동평균선 토글
+    const maToggle = document.getElementById("ma-toggle");
+    const maPanel = document.getElementById("ma-panel");
+
+    maToggle?.addEventListener("click", () => {
+      maPanel.classList.toggle("hidden");
+    });
+
+    // 이동평균선 체크박스들
+    maPanel?.addEventListener("change", (e) => {
+      if (e.target.type === "checkbox" && e.target.dataset.ma) {
+        const period = parseInt(e.target.dataset.ma);
+        if (e.target.checked) {
+          this.addMovingAverage(period);
+        } else {
+          this.removeMovingAverage(period);
+        }
+      }
+    });
+
+    // 보조지표 토글
+    const techToggle = document.getElementById("technical-toggle");
+    const techPanel = document.getElementById("technical-panel");
+
+    techToggle?.addEventListener("click", () => {
+      techPanel.classList.toggle("hidden");
+    });
+
+    // 보조지표 체크박스들
+    techPanel?.addEventListener("change", (e) => {
+      if (e.target.type === "checkbox" && e.target.dataset.indicator) {
+        const indicator = e.target.dataset.indicator;
+        if (e.target.checked) {
+          this.addTechnicalIndicator(indicator);
+        } else {
+          this.removeIndicator(indicator);
+        }
+      }
+    });
+  }
+
+  // 새 메서드 추가
+  removeMovingAverage(period) {
+    if (this.chart?.removeMovingAverage) {
+      this.chart.removeMovingAverage(period);
+    }
+  }
+
+  removeIndicator(type) {
+    if (this.chart?.removeIndicator) {
+      this.chart.removeIndicator(type);
+    }
+  }
+
+  // 🔧 이동평균선 추가 메서드
+  addMovingAverage(period) {
+    if (this.chart && typeof this.chart.addMovingAverage === "function") {
+      const maSeries = this.chart.addMovingAverage(period);
+      if (maSeries) {
+        // 전역 currentIndicators에 추가 (HTML의 clearAllIndicators와 호환)
+        if (typeof window !== "undefined" && window.currentIndicators) {
+          window.currentIndicators.push({
+            type: `MA${period}`,
+            series: maSeries,
+            period: period,
+          });
+        }
+        console.log(`MA${period} 이동평균선이 추가되었습니다.`);
+      }
+    }
+  }
+
+  // 🔧 보조지표 추가 메서드
+  addTechnicalIndicator(type) {
+    if (this.chart && typeof this.chart.addIndicator === "function") {
+      const indicator = this.chart.addIndicator(type);
+      if (indicator) {
+        // 전역 currentIndicators에 추가
+        if (typeof window !== "undefined" && window.currentIndicators) {
+          window.currentIndicators.push({ type, series: indicator });
+        }
+        console.log(`${type} 지표가 추가되었습니다.`);
+      }
+    }
+  }
+
+  // 🔧 차트 타입 변경 메서드
+  changeChartType(chartType) {
+    if (this.chart && typeof this.chart.changeChartType === "function") {
+      this.chart.changeChartType(chartType);
+      console.log(`차트 타입이 ${chartType}으로 변경되었습니다.`);
+    }
+  }
+
+  // 🔧 시간단위 변경 메서드
+  changeTimeframe(unit) {
+    if (this.state && this.chart) {
+      this.state.activeUnit = unit;
+
+      // 기존 시간 탭 UI도 업데이트 (있다면)
+      document.querySelectorAll(".time-tab").forEach((tab) => {
+        tab.classList.remove("active");
+        if (tab.dataset.unit === unit) {
+          tab.classList.add("active");
+        }
+      });
+
+      // 드롭다운과 동기화
+      const timeframeSelect = document.getElementById("timeframe-select");
+      if (timeframeSelect) {
+        timeframeSelect.value = unit;
+      }
+
+      this.chart.fetchAndRender();
+      console.log(`시간단위가 ${unit}으로 변경되었습니다.`);
+    }
   }
 
   // 🔧 새로고침 스피너 표시 (전체 새로고침만)

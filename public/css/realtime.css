@@ -962,3 +962,101 @@ canvas {
     min-height: 100px;
   }
 }
+
+/* 드롭다운 공통 스타일 */
+.indicator-dropdown,
+.timeframe-dropdown {
+  background-color: #2a2a2a;
+  color: #e0e0e0;
+  border: 1px solid #444;
+  padding: 8px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+  min-width: 120px;
+}
+
+.indicator-dropdown:hover,
+.timeframe-dropdown:hover {
+  background-color: #444;
+  border-color: #666;
+}
+
+.indicator-dropdown:focus,
+.timeframe-dropdown:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+}
+
+/* 시간단위 컨트롤 스타일 */
+.time-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.time-controls label {
+  color: #e0e0e0;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.timeframe-dropdown {
+  min-width: 80px;
+}
+
+/* 기존 indicator-controls 스타일 수정 */
+.indicator-controls {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+/* 반응형 개선 */
+@media (max-width: 768px) {
+  .indicator-controls {
+    gap: 10px;
+  }
+
+  .indicator-dropdown,
+  .timeframe-dropdown {
+    min-width: 100px;
+    font-size: 0.8rem;
+    padding: 6px 10px;
+  }
+}
+
+/* 기존 indicator-controls 뒤에 추가 */
+.dropdown-container {
+  position: relative;
+}
+
+.indicator-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 5px;
+  padding: 10px;
+  min-width: 150px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.indicator-panel label {
+  display: block;
+  margin-bottom: 8px;
+  cursor: pointer;
+  color: #e0e0e0;
+  font-size: 0.9rem;
+}
+
+.indicator-panel input[type="checkbox"] {
+  margin-right: 8px;
+}

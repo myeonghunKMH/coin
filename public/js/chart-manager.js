@@ -303,7 +303,6 @@ export class ChartManager {
       },
     });
     this.priceSeries.setData(candleData);
-    this.addIndicatorToMainChart(ma5Data, ma20Data);
 
     // 2. 볼륨 차트 생성 (X축 틱만 표시)
     this.volumeChart = LightweightCharts.createChart(volumeContainer, {
@@ -318,6 +317,15 @@ export class ChartManager {
         shiftVisibleRangeOnNewBar: true,
         fixLeftEdge: true,
         fixRightEdge: true,
+        tickMarkFormatter: (time) => {
+          const date = new Date(time * 1000);
+          return date.toLocaleTimeString("ko-KR", {
+            timeZone: "Asia/Seoul",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          });
+        },
       },
       rightPriceScale: {
         borderColor: "rgba(255, 255, 255, 0.1)",
@@ -548,76 +556,35 @@ export class ChartManager {
   setupInfiniteScroll() {
     if (!this.priceChart) return;
 
-    let failedAttempts = 0;
-    const MAX_FAILED_ATTEMPTS = 3;
-    let lastFailedTimestamp = null;
-    let scrollTimeout; // 디바운싱용
-    let lastTriggeredRange = null; // 마지막 트리거된 범위
+    let scrollTimeout; // 디바운싱 타이머를 위한 변수
 
     this.priceChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-      if (this.isLoadingMore || !range) return;
+      if (!range) return;
 
-      // 실패 횟수 제한 확인
-      if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
-        return;
-      }
-
-      // 트리거 조건 확인 (왼쪽 끝 근처만)
+      // 트리거 조건 확인 (왼쪽 끝 근처)
       const shouldTrigger = range.from <= 80;
 
       if (shouldTrigger) {
-        // 디바운싱: 1000ms 대기 후 실행
+        // 기존 타이머를 제거하여 마지막 이벤트만 남김
         clearTimeout(scrollTimeout);
+
+        // 400ms 후에 데이터 로딩 함수 실행
         scrollTimeout = setTimeout(() => {
-          // 이미 비슷한 범위에서 트리거됐는지 확인
-          if (
-            lastTriggeredRange &&
-            Math.abs(range.from - lastTriggeredRange.from) < 2
-          ) {
-            console.log("중복 트리거 방지 - 비슷한 범위에서 이미 실행됨");
-            return;
-          }
-
           console.log("무한스크롤 트리거 - range.from:", range.from);
-          lastTriggeredRange = { ...range }; // 현재 범위 저장
-
           this.loadMoreHistoricalData()
             .then((success) => {
               if (success) {
-                failedAttempts = 0;
-                lastFailedTimestamp = null;
+                console.log("추가 데이터 로딩 성공");
               } else {
-                failedAttempts++;
-                lastFailedTimestamp = Date.now();
-                console.warn(
-                  `무한스크롤 실패 횟수: ${failedAttempts}/${MAX_FAILED_ATTEMPTS}`
-                );
+                console.warn("추가 데이터가 없습니다.");
               }
             })
             .catch((error) => {
-              failedAttempts++;
-              lastFailedTimestamp = Date.now();
-              console.error(
-                `무한스크롤 오류 (${failedAttempts}/${MAX_FAILED_ATTEMPTS}):`,
-                error
-              );
+              console.error("무한스크롤 오류:", error);
             });
-        }, 400); // 400ms 디바운싱
+        }, 400); // 디바운싱 시간 (400ms)
       }
     });
-
-    // 실패 카운터 리셋 (60초 후)
-    setInterval(() => {
-      if (failedAttempts >= MAX_FAILED_ATTEMPTS && lastFailedTimestamp) {
-        const timeSinceLastFail = Date.now() - lastFailedTimestamp;
-        if (timeSinceLastFail > 60000) {
-          console.log("무한스크롤 재시도 허용 (60초 경과)");
-          failedAttempts = 0;
-          lastFailedTimestamp = null;
-          lastTriggeredRange = null; // 범위도 리셋
-        }
-      }
-    }, 10000);
   }
 
   // chart-manager.js의 loadMoreHistoricalData 메서드만 수정
@@ -836,5 +803,115 @@ export class ChartManager {
       console.error("시간 계산 오류:", error);
       return oldestCandle.candle_date_time_utc; // 실패 시 기존 방식
     }
+  }
+  removeMovingAverage(period) {
+    const key = `ma${period}`;
+    if (this.indicatorSeries[key]) {
+      this.priceChart.removeSeries(this.indicatorSeries[key]);
+      delete this.indicatorSeries[key];
+      console.log(`MA${period} 제거됨`);
+    }
+  }
+
+  addMovingAverage(period) {
+    if (!this.priceChart || !this.lastCandleData) {
+      console.warn("차트 또는 캔들 데이터가 없어서 이동평균선 추가 불가");
+      return null;
+    }
+
+    const key = `ma${period}`;
+
+    // 이미 있으면 제거 후 재추가
+    if (this.indicatorSeries[key]) {
+      this.priceChart.removeSeries(this.indicatorSeries[key]);
+    }
+
+    const colors = {
+      5: "#FF6B6B", // 빨강
+      10: "#4ECDC4", // 청록
+      20: "#45B7D1", // 파랑
+      50: "#96CEB4", // 초록
+      100: "#FFEAA7", // 노랑
+      200: "#DDA0DD", // 보라
+    };
+
+    const maSeries = this.priceChart.addLineSeries({
+      color: colors[period] || "#FFFFFF",
+      lineWidth: 2,
+      title: `MA${period}`,
+      lastValueVisible: true,
+    });
+
+    // MA 데이터 계산 및 적용
+    const maData = this.calculateSafeMA(this.lastCandleData, period);
+    if (maData.length > 0) {
+      maSeries.setData(maData);
+    }
+
+    this.indicatorSeries[key] = maSeries;
+    console.log(`MA${period} 추가됨`);
+    return maSeries;
+  }
+
+  // 이동평균선 제거
+  removeMovingAverage(period) {
+    const key = `ma${period}`;
+    if (this.indicatorSeries[key]) {
+      this.priceChart.removeSeries(this.indicatorSeries[key]);
+      delete this.indicatorSeries[key];
+      console.log(`MA${period} 제거됨`);
+      return true;
+    }
+    return false;
+  }
+
+  // 보조지표 추가 (기존 addIndicator 개선)
+  addIndicator(type) {
+    if (!this.priceChart) return null;
+
+    // 이미 있으면 제거 후 재추가
+    if (this.indicatorSeries[type]) {
+      this.priceChart.removeSeries(this.indicatorSeries[type]);
+    }
+
+    // RSI 예시 (다른 지표들도 비슷하게 구현)
+    if (type === "RSI") {
+      // RSI 계산 로직 (간단한 예시)
+      const rsiSeries = this.priceChart.addLineSeries({
+        color: "#FFA500",
+        lineWidth: 2,
+        title: "RSI",
+        priceScaleId: "rsi",
+      });
+
+      this.indicatorSeries[type] = rsiSeries;
+      console.log(`${type} 지표 추가됨`);
+      return rsiSeries;
+    }
+
+    // 다른 지표들...
+    return null;
+  }
+
+  // 보조지표 제거
+  removeIndicator(type) {
+    if (this.indicatorSeries[type]) {
+      this.priceChart.removeSeries(this.indicatorSeries[type]);
+      delete this.indicatorSeries[type];
+      console.log(`${type} 지표 제거됨`);
+      return true;
+    }
+    return false;
+  }
+
+  // 모든 지표 제거
+  clearAllIndicators() {
+    Object.keys(this.indicatorSeries).forEach((key) => {
+      if (this.indicatorSeries[key]) {
+        this.priceChart.removeSeries(this.indicatorSeries[key]);
+        delete this.indicatorSeries[key];
+      }
+    });
+    console.log("모든 지표 제거됨");
   }
 }

@@ -17,29 +17,52 @@
       <div class="top-chart-section">
         <div class="chart-controls">
           <div class="coin-tabs" id="coin-tabs"></div>
-          <!-- 기술적 지표 추가 버튼 -->
-          <div class="indicator-controls" style="margin-top: 10px">
-            <button class="indicator-btn" onclick="addIndicator('RSI')">
-              RSI
-            </button>
-            <button class="indicator-btn" onclick="addIndicator('MACD')">
-              MACD
-            </button>
-            <button class="indicator-btn" onclick="addIndicator('BB')">
-              Bollinger Bands
-            </button>
-            <button class="indicator-btn" onclick="clearIndicators()">
-              지표 초기화
-            </button>
+
+          <!-- 지표 및 차트 설정 드롭다운들 -->
+          <div class="indicator-controls">
+            <div class="dropdown-container">
+              <button class="indicator-btn" id="ma-toggle">이동평균선 ▼</button>
+              <div class="indicator-panel hidden" id="ma-panel">
+                <label><input type="checkbox" data-ma="5" /> MA5</label>
+                <label><input type="checkbox" data-ma="10" /> MA10</label>
+                <label><input type="checkbox" data-ma="20" /> MA20</label>
+                <label><input type="checkbox" data-ma="50" /> MA50</label>
+                <label><input type="checkbox" data-ma="100" /> MA100</label>
+                <label><input type="checkbox" data-ma="200" /> MA200</label>
+              </div>
+            </div>
+
+            <div class="dropdown-container">
+              <button class="indicator-btn" id="technical-toggle">
+                보조지표 ▼
+              </button>
+              <div class="indicator-panel hidden" id="technical-panel">
+                <label
+                  ><input type="checkbox" data-indicator="RSI" /> RSI</label
+                >
+                <label
+                  ><input type="checkbox" data-indicator="MACD" /> MACD</label
+                >
+                <label
+                  ><input type="checkbox" data-indicator="BB" />
+                  볼린저밴드</label
+                >
+              </div>
+            </div>
           </div>
-          <div class="time-tabs" id="time-tabs">
-            <button class="time-tab" data-unit="1">1분</button>
-            <button class="time-tab" data-unit="5">5분</button>
-            <button class="time-tab" data-unit="15">15분</button>
-            <button class="time-tab" data-unit="30">30분</button>
-            <button class="time-tab active" data-unit="60">1시간</button>
-            <button class="time-tab" data-unit="240">4시간</button>
-            <button class="time-tab" data-unit="1D">1일</button>
+
+          <!-- 시간단위를 드롭다운으로 변경 -->
+          <div class="time-controls">
+            <!-- <label for="timeframe-select">시간단위:</label> -->
+            <select id="timeframe-select" class="timeframe-dropdown">
+              <option value="1">1분</option>
+              <option value="5">5분</option>
+              <option value="15">15분</option>
+              <option value="30">30분</option>
+              <option value="60" selected>1시간</option>
+              <option value="240">4시간</option>
+              <option value="1D">1일</option>
+            </select>
           </div>
         </div>
         <div class="chart-container">
