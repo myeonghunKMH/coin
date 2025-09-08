@@ -1,4 +1,4 @@
-// chart-manager.js - TradingView Lightweight Charts 버전
+// chart-manager.js - TradingView Lightweight Charts 버전 (X축 틱 제거 및 정렬 개선)
 import { COIN_NAMES } from "./constants.js";
 
 export class ChartManager {
@@ -76,9 +76,9 @@ export class ChartManager {
       return;
     }
 
-    const chartConfig = {
+    // 🔧 공통 차트 설정
+    const commonChartConfig = {
       width: priceContainer.clientWidth,
-      height: priceContainer.clientHeight,
       layout: {
         background: { type: "solid", color: "#1a1a1a" },
         textColor: "#e0e0e0",
@@ -102,13 +102,6 @@ export class ChartManager {
           labelBackgroundColor: "rgba(0, 0, 0, 0.8)",
         },
       },
-      timeScale: {
-        borderColor: "rgba(255, 255, 255, 0.1)",
-        textColor: "#e0e0e0",
-        timeVisible: true,
-        secondsVisible: false,
-        timezone: "Asia/Seoul", // UTC+9 시간대
-      },
       handleScroll: {
         mouseWheel: false,
         pressedMouseMove: true,
@@ -118,13 +111,28 @@ export class ChartManager {
         mouseWheel: false,
         pinch: true,
       },
-    }; // 1. 메인 가격 차트 생성
+    };
 
+    // 🔧 1. 가격 차트 생성 (X축 틱 제거)
     this.priceChart = LightweightCharts.createChart(priceContainer, {
-      ...chartConfig,
+      ...commonChartConfig,
+      height: 280,
+      timeScale: {
+        borderColor: "rgba(255, 255, 255, 0.1)",
+        textColor: "#e0e0e0",
+        visible: false, // 🔧 X축 틱 완전 제거
+        fixLeftEdge: true,
+        fixRightEdge: true,
+      },
       rightPriceScale: {
         borderColor: "rgba(255, 255, 255, 0.1)",
         textColor: "#e0e0e0",
+        scaleMargins: {
+          top: 0.1,
+          bottom: 0.1,
+        },
+        entireTextOnly: true,
+        minimumWidth: 80,
       },
     });
 
@@ -141,30 +149,53 @@ export class ChartManager {
       },
     });
     this.priceSeries.setData(candleData);
-    this.addIndicatorToMainChart(ma5Data, ma20Data); // 2. 볼륨 차트 생성
+    this.addIndicatorToMainChart(ma5Data, ma20Data);
 
-    const volumeChartConfig = { ...chartConfig };
-    volumeChartConfig.width = volumeContainer.clientWidth;
-    volumeChartConfig.height = volumeContainer.clientHeight;
-
+    // 🔧 2. 볼륨 차트 생성 (X축 틱만 표시)
     this.volumeChart = LightweightCharts.createChart(volumeContainer, {
-      ...volumeChartConfig,
+      ...commonChartConfig,
+      height: 120,
+      timeScale: {
+        borderColor: "rgba(255, 255, 255, 0.1)",
+        textColor: "#e0e0e0",
+        visible: true, // 🔧 볼륨차트에서만 X축 표시
+        timeVisible: true,
+        secondsVisible: false,
+        timezone: "Asia/Seoul",
+        fixLeftEdge: true,
+        fixRightEdge: true,
+      },
       rightPriceScale: {
         borderColor: "rgba(255, 255, 255, 0.1)",
         textColor: "#e0e0e0",
-        // 볼륨 차트의 높이 비율을 줄임
+        // 🔧 Y축 자동 스케일링을 위해 scaleMargins 조정
         scaleMargins: {
-          top: 0.8,
-          bottom: 0,
+          top: 0.1, // 상단 여백
+          bottom: 0, // 하단 여백 제거
+        },
+        entireTextOnly: true,
+        minimumWidth: 80, // 🔧 가격차트와 동일한 Y축 너비
+      },
+    });
+
+    this.volumeSeries = this.volumeChart.addHistogramSeries({
+      color: "#26a69a",
+      priceFormat: {
+        type: "volume",
+        // 🔧 볼륨 포맷 개선
+        formatter: (volume) => {
+          if (volume >= 1000000) {
+            return (volume / 1000000).toFixed(1) + "M";
+          } else if (volume >= 1000) {
+            return (volume / 1000).toFixed(1) + "K";
+          }
+          return Math.round(volume).toString();
         },
       },
     });
-    this.volumeSeries = this.volumeChart.addHistogramSeries({
-      color: "#26a69a",
-      priceFormat: { type: "volume" },
-    });
-    this.volumeSeries.setData(volumeData); // 3. 차트 스케일 동기화
+    this.volumeSeries.setData(volumeData);
 
+    // 🔧 3. 차트 스케일 동기화 (X축 완벽 정렬)
     this.priceChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
       this.volumeChart.timeScale().setVisibleLogicalRange(range);
     });
@@ -173,9 +204,15 @@ export class ChartManager {
       this.priceChart.timeScale().setVisibleLogicalRange(range);
     });
 
-    // 4. 초기 차트 뷰 설정
-    this.priceChart.timeScale().fitContent(); // 반응형 처리
+    // 🔧 4. 초기 차트 뷰 설정 및 정렬
+    // 두 차트를 동시에 맞춤
+    this.priceChart.timeScale().fitContent();
+    this.volumeChart.timeScale().fitContent();
 
+    // 🔧 setTimeout 블록 제거
+    // 이 코드를 제거하여 Lightweight Charts의 기본 자동 스케일링 기능을 사용합니다.
+
+    // 반응형 처리
     this.setupResponsive();
     this.lastCandleData = candleData;
   }
@@ -244,24 +281,23 @@ export class ChartManager {
       return;
 
     const resizeObserver = new ResizeObserver((entries) => {
-      if (this.priceChart && entries[0]) {
-        const { width, height } = entries.find(
-          (entry) => entry.target === priceContainer
-        ).contentRect;
-        this.priceChart.applyOptions({
-          width: Math.max(width, 300),
-          height: Math.max(height, 300),
-        });
-      }
-      if (this.volumeChart && entries[1]) {
-        const { width, height } = entries.find(
-          (entry) => entry.target === volumeContainer
-        ).contentRect;
-        this.volumeChart.applyOptions({
-          width: Math.max(width, 300),
-          height: Math.max(height, 300),
-        });
-      }
+      entries.forEach((entry) => {
+        const { width, height } = entry.contentRect;
+
+        if (entry.target === priceContainer && this.priceChart) {
+          this.priceChart.applyOptions({
+            width: Math.max(width, 300),
+            height: Math.max(height, 200), // 🔧 최소 높이도 축소
+          });
+        }
+
+        if (entry.target === volumeContainer && this.volumeChart) {
+          this.volumeChart.applyOptions({
+            width: Math.max(width, 300),
+            height: Math.max(height, 80), // 🔧 볼륨차트 최소 높이 축소
+          });
+        }
+      });
     });
 
     resizeObserver.observe(priceContainer);
@@ -282,6 +318,10 @@ export class ChartManager {
       this.volumeChart.remove();
       this.volumeChart = null;
     }
+    // 시리즈 초기화
+    this.priceSeries = null;
+    this.volumeSeries = null;
+    this.indicatorSeries = {};
   }
 
   checkAutoUpdate() {

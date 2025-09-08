@@ -913,17 +913,52 @@ canvas {
   }
 }
 
-/* style.css */
+/* realtime.css에서 차트 관련 부분 수정 */
+
+/* 🔧 차트 컨테이너 크기 축소 및 정렬 개선 */
 .chart-container {
   display: flex;
-  flex-direction: column; /* 차트를 세로로 쌓음 */
+  flex-direction: column;
   width: 100%;
-  height: 100vh; /* 화면 전체 높이 사용 (테스트용) */
+  height: 420px; /* 🔧 전체 높이 축소 (기존보다 작게) */
+  border-radius: 4px;
+  overflow: hidden;
+  background-color: #1a1a1a;
 }
 
+#priceChart {
+  flex: 3; /* 가격차트가 더 큰 비율 */
+  min-height: 280px; /* 🔧 최소 높이 설정 */
+  width: 100%;
+}
+
+#volumeChart {
+  flex: 1; /* 볼륨차트는 작은 비율 */
+  min-height: 120px; /* 🔧 최소 높이 설정 */
+  width: 100%;
+  border-top: 1px solid #333; /* 구분선 */
+}
+
+/* 🔧 차트 간 여백 제거 */
 #priceChart,
 #volumeChart {
-  flex-grow: 1; /* flex 속성을 사용하여 공간을 차지하도록 함 */
-  /* 아래 높이/너비는 필요에 따라 조정 가능 */
-  min-height: 150px; /* 최소 높이를 설정하여 차트가 보장되도록 함 */
+  margin: 0;
+  padding: 0;
+  border: none;
+  display: block;
+}
+
+/* 🔧 반응형 개선 */
+@media (max-width: 768px) {
+  .chart-container {
+    height: 360px; /* 모바일에서 더 작게 */
+  }
+
+  #priceChart {
+    min-height: 240px;
+  }
+
+  #volumeChart {
+    min-height: 100px;
+  }
 }

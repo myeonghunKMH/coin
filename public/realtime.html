@@ -17,6 +17,21 @@
       <div class="top-chart-section">
         <div class="chart-controls">
           <div class="coin-tabs" id="coin-tabs"></div>
+          <!-- 기술적 지표 추가 버튼 -->
+          <div class="indicator-controls" style="margin-top: 10px">
+            <button class="indicator-btn" onclick="addIndicator('RSI')">
+              RSI
+            </button>
+            <button class="indicator-btn" onclick="addIndicator('MACD')">
+              MACD
+            </button>
+            <button class="indicator-btn" onclick="addIndicator('BB')">
+              Bollinger Bands
+            </button>
+            <button class="indicator-btn" onclick="clearIndicators()">
+              지표 초기화
+            </button>
+          </div>
           <div class="time-tabs" id="time-tabs">
             <button class="time-tab" data-unit="1">1분</button>
             <button class="time-tab" data-unit="5">5분</button>
@@ -30,22 +45,6 @@
         <div class="chart-container">
           <div id="priceChart" style="flex: 3"></div>
           <div id="volumeChart" style="flex: 1"></div>
-        </div>
-
-        <!-- 기술적 지표 추가 버튼 -->
-        <div class="indicator-controls" style="margin-top: 10px">
-          <button class="indicator-btn" onclick="addIndicator('RSI')">
-            RSI
-          </button>
-          <button class="indicator-btn" onclick="addIndicator('MACD')">
-            MACD
-          </button>
-          <button class="indicator-btn" onclick="addIndicator('BB')">
-            Bollinger Bands
-          </button>
-          <button class="indicator-btn" onclick="clearIndicators()">
-            지표 초기화
-          </button>
         </div>
       </div>
 
