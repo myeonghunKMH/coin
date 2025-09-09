@@ -439,35 +439,48 @@ export class ChartManager {
     }
 
     // 3. 차트 스케일 동기화 (X축 완벽 정렬)
-    this.priceChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+    const syncTimeScale = (range) => {
       this.volumeChart.timeScale().setVisibleLogicalRange(range);
-    });
+      if (this.rsiChart) {
+        this.rsiChart.timeScale().setVisibleLogicalRange(range);
+      }
+      if (this.macdChart) {
+        this.macdChart.timeScale().setVisibleLogicalRange(range);
+      }
+    };
 
+    this.priceChart.timeScale().subscribeVisibleLogicalRangeChange(syncTimeScale);
     this.volumeChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
       this.priceChart.timeScale().setVisibleLogicalRange(range);
     });
-    if (this.rsiChart) {
-      this.priceChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-        this.rsiChart.timeScale().setVisibleLogicalRange(range);
-    });
-    }
-    if (this.macdChart) {
-      this.priceChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-        this.macdChart.timeScale().setVisibleLogicalRange(range);
-      });
-    }
 
     // 4. 개선된 크로스헤어 동기화 (양방향 동기화)
     this.priceChart.subscribeCrosshairMove((param) => {
       if (param.point) {
-        // 가격 차트의 크로스헤어를 볼륨 차트에 동기화
         const point = {
           x: param.point.x,
-          y: volumeContainer.clientHeight / 2, // 볼륨 차트 중앙에 표시
+          y: volumeContainer.clientHeight / 2,
         };
         this.volumeChart.setCrosshairPosition(point.x, point.y);
+        
+        // 🔧 보조지표 차트들도 크로스헤어 동기화
+        if (this.rsiChart) {
+          const rsiContainer = document.querySelector('#rsiChart .chart-content');
+          if (rsiContainer) {
+            this.rsiChart.setCrosshairPosition(param.point.x, rsiContainer.clientHeight / 2);
+          }
+        }
+        
+        if (this.macdChart) {
+          const macdContainer = document.querySelector('#macdChart .chart-content');
+          if (macdContainer) {
+            this.macdChart.setCrosshairPosition(param.point.x, macdContainer.clientHeight / 2);
+          }
+        }
       } else {
         this.volumeChart.clearCrosshairPosition();
+        if (this.rsiChart) this.rsiChart.clearCrosshairPosition();
+        if (this.macdChart) this.macdChart.clearCrosshairPosition();
       }
     });
 
@@ -618,6 +631,13 @@ export class ChartManager {
       lineWidth: 2,
     });
     
+    if (this.priceChart) {
+        const currentRange = this.priceChart.timeScale().getVisibleLogicalRange();
+        if (currentRange) {
+          this.rsiChart.timeScale().setVisibleLogicalRange(currentRange);
+        }
+      }
+
     return this.rsiChart;
   }
 
@@ -657,6 +677,15 @@ export class ChartManager {
     this.macdHistogramSeries = this.macdChart.addHistogramSeries({
       color: '#26a69a',
     });
+
+      // 🔧 생성 시 현재 가격차트 범위와 동기화
+    if (this.priceChart) {
+      const currentRange = this.priceChart.timeScale().getVisibleLogicalRange();
+      if (currentRange) {
+        this.macdChart.timeScale().setVisibleLogicalRange(currentRange);
+      }
+    }
+
     
     return this.macdChart;
   }
