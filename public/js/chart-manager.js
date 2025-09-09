@@ -1,4 +1,4 @@
-// chart-manager.js - TradingView Lightweight Charts 정리된 버전
+// chart-manager.js
 import { COIN_NAMES } from "./constants.js";
 import { CacheManager } from "./cache-manager.js";
 
