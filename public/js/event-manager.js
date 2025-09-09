@@ -20,6 +20,7 @@ export class EventManager {
     this.setupTradeHistoryTabEvents();
     this.setupOrderListButtonEvents();
     this.setupDropdownEvents(); // 🔧 드롭다운 이벤트 추가
+    this.setupIndicatorCloseButtons();
   }
 
   setupTradeHistoryTabEvents() {
@@ -335,13 +336,14 @@ export class EventManager {
     });
 
     // 보조지표 체크박스들
+    // 보조지표 체크박스들
     techPanel?.addEventListener("change", (e) => {
       if (e.target.type === "checkbox" && e.target.dataset.indicator) {
         const indicator = e.target.dataset.indicator;
         if (e.target.checked) {
-          this.addTechnicalIndicator(indicator);
+          this.showIndicatorChart(indicator);
         } else {
-          this.removeIndicator(indicator);
+          this.hideIndicatorChart(indicator);
         }
       }
     });
@@ -379,16 +381,40 @@ export class EventManager {
   }
 
   // 🔧 보조지표 추가 메서드
-  addTechnicalIndicator(type) {
-    if (this.chart && typeof this.chart.addIndicator === "function") {
-      const indicator = this.chart.addIndicator(type);
-      if (indicator) {
-        // 전역 currentIndicators에 추가
-        if (typeof window !== "undefined" && window.currentIndicators) {
-          window.currentIndicators.push({ type, series: indicator });
-        }
-        console.log(`${type} 지표가 추가되었습니다.`);
+  // 🔧 지표 차트 표시/숨김 메서드들
+  showIndicatorChart(type) {
+    if (type === 'RSI') {
+      const rsiContainer = document.getElementById('rsiChart');
+      if (rsiContainer) {
+        rsiContainer.classList.remove('hidden');
+        this.chart.addIndicator('RSI');
       }
+    } else if (type === 'MACD') {
+      const macdContainer = document.getElementById('macdChart');
+      if (macdContainer) {
+        macdContainer.classList.remove('hidden');
+        this.chart.addIndicator('MACD');
+      }
+    } else if (type === 'BB') {
+      this.chart.addIndicator('BB');
+    }
+  }
+
+  hideIndicatorChart(type) {
+    if (type === 'RSI') {
+      const rsiContainer = document.getElementById('rsiChart');
+      if (rsiContainer) {
+        rsiContainer.classList.add('hidden');
+        this.chart.removeIndicator('RSI');
+      }
+    } else if (type === 'MACD') {
+      const macdContainer = document.getElementById('macdChart');
+      if (macdContainer) {
+        macdContainer.classList.add('hidden');
+        this.chart.removeIndicator('MACD');
+      }
+    } else if (type === 'BB') {
+      this.chart.removeIndicator('BB');
     }
   }
 
@@ -444,5 +470,28 @@ export class EventManager {
         button.textContent = "🔄";
       }
     }
+  }
+
+  setupIndicatorCloseButtons() {
+    document.addEventListener('click', (e) => {
+      if (e.target.classList.contains('indicator-close')) {
+        const targetChart = e.target.dataset.target;
+        const container = document.getElementById(targetChart);
+        
+        if (container) {
+          container.classList.add('hidden');
+          
+          // 체크박스도 해제
+          const indicator = container.dataset.indicator;
+          const checkbox = document.querySelector(`input[data-indicator="${indicator}"]`);
+          if (checkbox) {
+            checkbox.checked = false;
+          }
+          
+          // 차트에서 지표 제거
+          this.chart.removeIndicator(indicator);
+        }
+      }
+    });
   }
 }

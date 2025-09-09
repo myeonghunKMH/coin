@@ -7,8 +7,17 @@ export class ChartManager {
     this.state = state;
     this.priceChart = null; // 메인 차트 인스턴스
     this.volumeChart = null; // 볼륨 차트 인스턴스
+    this.rsiChart = null;
+    this.macdChart = null;
     this.priceSeries = null;
     this.volumeSeries = null;
+    this.rsiSeries = null;
+    this.macdSeries = null;
+    this.macdSignalSeries = null;
+    this.macdHistogramSeries = null;
+    this.bbUpperSeries = null;
+    this.bbLowerSeries = null;
+    this.bbMiddleSeries = null;
     this.indicatorSeries = {}; // 지표 시리즈를 관리할 객체
     this.cacheManager = new CacheManager();
     this.allCandleData = []; // 전체 캔들 데이터 저장
@@ -437,6 +446,16 @@ export class ChartManager {
     this.volumeChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
       this.priceChart.timeScale().setVisibleLogicalRange(range);
     });
+    if (this.rsiChart) {
+      this.priceChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+        this.rsiChart.timeScale().setVisibleLogicalRange(range);
+    });
+    }
+    if (this.macdChart) {
+      this.priceChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+        this.macdChart.timeScale().setVisibleLogicalRange(range);
+      });
+    }
 
     // 4. 개선된 크로스헤어 동기화 (양방향 동기화)
     this.priceChart.subscribeCrosshairMove((param) => {
@@ -480,6 +499,166 @@ export class ChartManager {
     this.setupInfiniteScroll();
     this.lastCandleData = candleData;
     this.lastVolumeData = volumeData;
+  }
+
+    // 🔧 보조지표 계산 메서드들
+  calculateBollingerBands(candleData, period = 20, multiplier = 2) {
+    const result = { upper: [], middle: [], lower: [] };
+    
+    for (let i = period - 1; i < candleData.length; i++) {
+      const slice = candleData.slice(i - period + 1, i + 1);
+      const closes = slice.map(c => c.close);
+      const sma = closes.reduce((sum, close) => sum + close, 0) / period;
+      
+      const variance = closes.reduce((sum, close) => sum + Math.pow(close - sma, 2), 0) / period;
+      const stdDev = Math.sqrt(variance);
+      
+      result.middle.push({ time: candleData[i].time, value: sma });
+      result.upper.push({ time: candleData[i].time, value: sma + (stdDev * multiplier) });
+      result.lower.push({ time: candleData[i].time, value: sma - (stdDev * multiplier) });
+    }
+    
+    return result;
+  }
+
+  calculateRSI(candleData, period = 14) {
+    const result = [];
+    const gains = [];
+    const losses = [];
+    
+    for (let i = 1; i < candleData.length; i++) {
+      const change = candleData[i].close - candleData[i - 1].close;
+      gains.push(change > 0 ? change : 0);
+      losses.push(change < 0 ? -change : 0);
+      
+      if (i >= period) {
+        const avgGain = gains.slice(-period).reduce((sum, gain) => sum + gain, 0) / period;
+        const avgLoss = losses.slice(-period).reduce((sum, loss) => sum + loss, 0) / period;
+        
+        const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+        const rsi = 100 - (100 / (1 + rs));
+        
+        result.push({ time: candleData[i].time, value: rsi });
+      }
+    }
+    
+    return result;
+  }
+
+  calculateMACD(candleData, fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) {
+    // EMA 계산 함수
+    const calculateEMA = (data, period) => {
+      const ema = [];
+      const multiplier = 2 / (period + 1);
+      
+      ema[0] = data[0];
+      for (let i = 1; i < data.length; i++) {
+        ema[i] = (data[i] * multiplier) + (ema[i - 1] * (1 - multiplier));
+      }
+      return ema;
+    };
+    
+    const closes = candleData.map(c => c.close);
+    const fastEMA = calculateEMA(closes, fastPeriod);
+    const slowEMA = calculateEMA(closes, slowPeriod);
+    
+    const macdLine = [];
+    for (let i = 0; i < closes.length; i++) {
+      macdLine.push(fastEMA[i] - slowEMA[i]);
+    }
+    
+    const signalLine = calculateEMA(macdLine, signalPeriod);
+    
+    const result = {
+      macd: [],
+      signal: [],
+      histogram: []
+    };
+    
+    for (let i = slowPeriod - 1; i < candleData.length; i++) {
+      const time = candleData[i].time;
+      result.macd.push({ time, value: macdLine[i] });
+      result.signal.push({ time, value: signalLine[i] });
+      result.histogram.push({ 
+        time, 
+        value: macdLine[i] - signalLine[i],
+        color: macdLine[i] - signalLine[i] >= 0 ? '#26a69a' : '#ef5350'
+      });
+    }
+    
+    return result;
+  }
+
+  // 🔧 보조지표 차트 생성 메서드들
+  createRSIChart() {
+    const container = document.querySelector('#rsiChart .chart-content');
+    if (!container) return null;
+    
+    this.rsiChart = LightweightCharts.createChart(container, {
+      width: container.clientWidth,
+      height: 95,
+      layout: {
+        background: { type: 'solid', color: '#1a1a1a' },
+        textColor: '#e0e0e0',
+      },
+      grid: {
+        vertLines: { color: 'rgba(255, 255, 255, 0.1)' },
+        horzLines: { color: 'rgba(255, 255, 255, 0.1)' },
+      },
+      timeScale: { visible: false },
+      rightPriceScale: {
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        textColor: '#e0e0e0',
+        scaleMargins: { top: 0.1, bottom: 0.1 },
+      },
+    });
+    
+    this.rsiSeries = this.rsiChart.addLineSeries({
+      color: '#FFA500',
+      lineWidth: 2,
+    });
+    
+    return this.rsiChart;
+  }
+
+  createMACDChart() {
+    const container = document.querySelector('#macdChart .chart-content');
+    if (!container) return null;
+    
+    this.macdChart = LightweightCharts.createChart(container, {
+      width: container.clientWidth,
+      height: 95,
+      layout: {
+        background: { type: 'solid', color: '#1a1a1a' },
+        textColor: '#e0e0e0',
+      },
+      grid: {
+        vertLines: { color: 'rgba(255, 255, 255, 0.1)' },
+        horzLines: { color: 'rgba(255, 255, 255, 0.1)' },
+      },
+      timeScale: { visible: false },
+      rightPriceScale: {
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        textColor: '#e0e0e0',
+        scaleMargins: { top: 0.1, bottom: 0.1 },
+      },
+    });
+    
+    this.macdSeries = this.macdChart.addLineSeries({
+      color: '#2196F3',
+      lineWidth: 2,
+    });
+    
+    this.macdSignalSeries = this.macdChart.addLineSeries({
+      color: '#FF9800',
+      lineWidth: 2,
+    });
+    
+    this.macdHistogramSeries = this.macdChart.addHistogramSeries({
+      color: '#26a69a',
+    });
+    
+    return this.macdChart;
   }
 
   addIndicatorToMainChart(ma5Data, ma20Data) {
@@ -579,6 +758,24 @@ export class ChartManager {
     this.priceSeries = null;
     this.volumeSeries = null;
     this.indicatorSeries = {};
+        // 🔧 보조지표 차트들 정리
+    if (this.rsiChart) {
+      this.rsiChart.remove();
+      this.rsiChart = null;
+      this.rsiSeries = null;
+    }
+    if (this.macdChart) {
+      this.macdChart.remove();
+      this.macdChart = null;
+      this.macdSeries = null;
+      this.macdSignalSeries = null;
+      this.macdHistogramSeries = null;
+    }
+    
+    // 볼린저밴드 시리즈 정리
+    this.bbUpperSeries = null;
+    this.bbLowerSeries = null;
+    this.bbMiddleSeries = null;
   }
 
   checkAutoUpdate() {
@@ -889,35 +1086,104 @@ export class ChartManager {
   }
 
   addIndicator(type) {
-    if (!this.priceChart) return null;
+    if (!this.priceChart || !this.lastCandleData) return null;
 
-    if (this.indicatorSeries[type]) {
-      this.priceChart.removeSeries(this.indicatorSeries[type]);
-    }
-
-    if (type === "RSI") {
-      const rsiSeries = this.priceChart.addLineSeries({
-        color: "#FFA500",
-        lineWidth: 2,
-        title: "RSI",
-        priceScaleId: "rsi",
+    if (type === 'RSI') {
+      if (!this.rsiChart) {
+        this.createRSIChart();
+      }
+      
+      const rsiData = this.calculateRSI(this.lastCandleData, 14);
+      if (rsiData.length > 0) {
+        this.rsiSeries.setData(rsiData);
+      }
+      
+      console.log('RSI 차트 활성화됨');
+      return this.rsiSeries;
+      
+    } else if (type === 'MACD') {
+      if (!this.macdChart) {
+        this.createMACDChart();
+      }
+      
+      const macdData = this.calculateMACD(this.lastCandleData);
+      if (macdData.macd.length > 0) {
+        this.macdSeries.setData(macdData.macd);
+        this.macdSignalSeries.setData(macdData.signal);
+        this.macdHistogramSeries.setData(macdData.histogram);
+      }
+      
+      console.log('MACD 차트 활성화됨');
+      return { macd: this.macdSeries, signal: this.macdSignalSeries, histogram: this.macdHistogramSeries };
+      
+    } else if (type === 'BB') {
+      const bbData = this.calculateBollingerBands(this.lastCandleData, 20, 2);
+      
+      this.bbUpperSeries = this.priceChart.addLineSeries({
+        color: 'rgba(255, 255, 255, 0.5)',
+        lineWidth: 1,
+        title: 'BB Upper',
       });
-
-      this.indicatorSeries[type] = rsiSeries;
-      console.log(`${type} 지표 추가됨`);
-      return rsiSeries;
+      
+      this.bbMiddleSeries = this.priceChart.addLineSeries({
+        color: 'rgba(255, 255, 255, 0.3)',
+        lineWidth: 1,
+        title: 'BB Middle',
+      });
+      
+      this.bbLowerSeries = this.priceChart.addLineSeries({
+        color: 'rgba(255, 255, 255, 0.5)',
+        lineWidth: 1,
+        title: 'BB Lower',
+      });
+      
+      this.bbUpperSeries.setData(bbData.upper);
+      this.bbMiddleSeries.setData(bbData.middle);
+      this.bbLowerSeries.setData(bbData.lower);
+      
+      this.indicatorSeries['BB'] = {
+        upper: this.bbUpperSeries,
+        middle: this.bbMiddleSeries,
+        lower: this.bbLowerSeries
+      };
+      
+      console.log('볼린저밴드 추가됨');
+      return this.indicatorSeries['BB'];
     }
 
     return null;
   }
 
   removeIndicator(type) {
-    if (this.indicatorSeries[type]) {
-      this.priceChart.removeSeries(this.indicatorSeries[type]);
-      delete this.indicatorSeries[type];
-      console.log(`${type} 지표 제거됨`);
+    if (type === 'RSI' && this.rsiChart) {
+      this.rsiChart.remove();
+      this.rsiChart = null;
+      this.rsiSeries = null;
+      console.log('RSI 차트 제거됨');
+      return true;
+      
+    } else if (type === 'MACD' && this.macdChart) {
+      this.macdChart.remove();
+      this.macdChart = null;
+      this.macdSeries = null;
+      this.macdSignalSeries = null;
+      this.macdHistogramSeries = null;
+      console.log('MACD 차트 제거됨');
+      return true;
+      
+    } else if (type === 'BB' && this.indicatorSeries['BB']) {
+      const bb = this.indicatorSeries['BB'];
+      this.priceChart.removeSeries(bb.upper);
+      this.priceChart.removeSeries(bb.middle);
+      this.priceChart.removeSeries(bb.lower);
+      delete this.indicatorSeries['BB'];
+      this.bbUpperSeries = null;
+      this.bbMiddleSeries = null;
+      this.bbLowerSeries = null;
+      console.log('볼린저밴드 제거됨');
       return true;
     }
+    
     return false;
   }
 

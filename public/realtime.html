@@ -66,9 +66,28 @@
           </div>
         </div>
         <div class="chart-container">
-          <div id="priceChart" style="flex: 3"></div>
-          <div id="volumeChart" style="flex: 1"></div>
-        </div>
+  <div id="priceChart" class="chart-section price-chart"></div>
+  
+  <!-- RSI 차트 (초기 숨김) -->
+  <div id="rsiChart" class="chart-section indicator-chart hidden" data-indicator="RSI">
+    <div class="indicator-header">
+      <span class="indicator-title">RSI (14)</span>
+      <button class="indicator-close" data-target="rsiChart">×</button>
+    </div>
+    <div class="chart-content"></div>
+  </div>
+  
+  <!-- MACD 차트 (초기 숨김) -->
+  <div id="macdChart" class="chart-section indicator-chart hidden" data-indicator="MACD">
+    <div class="indicator-header">
+      <span class="indicator-title">MACD (12, 26, 9)</span>
+      <button class="indicator-close" data-target="macdChart">×</button>
+    </div>
+    <div class="chart-content"></div>
+  </div>
+  
+  <div id="volumeChart" class="chart-section volume-chart"></div>
+</div>
       </div>
 
       <div class="bottom-content">

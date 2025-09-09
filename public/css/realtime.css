@@ -920,9 +920,10 @@ canvas {
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 520px; /* 🔧 전체 높이 축소 (기존보다 작게) */
+  min-height: 520px; /* 🔧 고정 높이를 최소 높이로 변경 */
+  max-height: 800px; /* 🔧 최대 높이 설정 (너무 길어지지 않게) */
   border-radius: 4px;
-  overflow: hidden;
+  overflow: visible; /* 🔧 overflow를 visible로 변경 */
   background-color: #1a1a1a;
 }
 
@@ -1059,4 +1060,83 @@ canvas {
 
 .indicator-panel input[type="checkbox"] {
   margin-right: 8px;
+}
+
+/* 보조지표 차트 레이아웃 */
+.chart-section {
+  width: 100%;
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: block;
+  position: relative;
+}
+
+.price-chart {
+  height: 320px;
+  min-height: 320px;
+  flex-shrink: 0;
+}
+
+.indicator-chart {
+  height: 120px;
+  min-height: 120px;
+  flex-shrink: 0;
+  border-top: 1px solid #333;
+  background-color: #1a1a1a;
+  transition: height 0.3s ease, opacity 0.3s ease;
+}
+
+.indicator-chart.hidden {
+  height: 0;
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  border: none;
+}
+
+.indicator-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 10px;
+  background-color: #1e1e1e;
+  border-bottom: 1px solid #333;
+  height: 25px;
+  font-size: 12px;
+}
+
+.indicator-title {
+  color: #e0e0e0;
+  font-weight: 500;
+}
+
+.indicator-close {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.indicator-close:hover {
+  color: #e0e0e0;
+}
+
+.chart-content {
+  height: calc(100% - 25px);
+  width: 100%;
+}
+
+.volume-chart {
+  flex: 1;
+  min-height: 80px;
+  border-top: 1px solid #333;
 }
