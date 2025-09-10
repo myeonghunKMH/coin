@@ -441,19 +441,19 @@ export class ChartManager {
     }
 
     // 3. 차트 스케일 동기화 (X축 완벽 정렬)
-    const syncTimeScale = (range, source = 'price') => {
+    const syncTimeScale = (range, source = "price") => {
       if (!range) return;
-      
+
       // 순환 참조 방지를 위한 플래그
       if (this._syncing) return;
       this._syncing = true;
-      
+
       try {
         // 소스에 따라 다른 차트들 동기화
-        if (source !== 'volume' && this.volumeChart) {
+        if (source !== "volume" && this.volumeChart) {
           this.volumeChart.timeScale().setVisibleLogicalRange(range);
         }
-        if (source !== 'price' && this.priceChart) {
+        if (source !== "price" && this.priceChart) {
           this.priceChart.timeScale().setVisibleLogicalRange(range);
         }
         if (this.rsiChart) {
@@ -463,67 +463,85 @@ export class ChartManager {
           this.macdChart.timeScale().setVisibleLogicalRange(range);
         }
       } catch (error) {
-        console.warn('차트 동기화 오류:', error);
+        console.warn("차트 동기화 오류:", error);
       } finally {
         this._syncing = false;
       }
     };
 
     this.priceChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-      syncTimeScale(range, 'price');
+      syncTimeScale(range, "price");
     });
     this.volumeChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-      syncTimeScale(range, 'volume');
+      syncTimeScale(range, "volume");
     });
 
     // 4. 개선된 크로스헤어 동기화 (모든 차트 완벽 동기화)
-    const syncCrosshair = (param, source = 'price') => {
+    const syncCrosshair = (param, source = "price") => {
       if (this._crosshairSyncing) return;
       this._crosshairSyncing = true;
-      
+
       try {
         if (param.point) {
           const x = param.point.x;
-          
+
           // 모든 차트에 동일한 X 좌표로 크로스헤어 설정
-          if (source !== 'price' && this.priceChart) {
-            this.priceChart.setCrosshairPosition(x, priceContainer.clientHeight / 2);
+          if (source !== "price" && this.priceChart) {
+            this.priceChart.setCrosshairPosition(
+              x,
+              priceContainer.clientHeight / 2
+            );
           }
-          if (source !== 'volume' && this.volumeChart) {
-            this.volumeChart.setCrosshairPosition(x, volumeContainer.clientHeight / 2);
+          if (source !== "volume" && this.volumeChart) {
+            this.volumeChart.setCrosshairPosition(
+              x,
+              volumeContainer.clientHeight / 2
+            );
           }
           if (this.rsiChart) {
-            const rsiContainer = document.querySelector('#rsiChart .chart-content');
+            const rsiContainer = document.querySelector(
+              "#rsiChart .chart-content"
+            );
             if (rsiContainer) {
-              this.rsiChart.setCrosshairPosition(x, rsiContainer.clientHeight / 2);
+              this.rsiChart.setCrosshairPosition(
+                x,
+                rsiContainer.clientHeight / 2
+              );
             }
           }
           if (this.macdChart) {
-            const macdContainer = document.querySelector('#macdChart .chart-content');
+            const macdContainer = document.querySelector(
+              "#macdChart .chart-content"
+            );
             if (macdContainer) {
-              this.macdChart.setCrosshairPosition(x, macdContainer.clientHeight / 2);
+              this.macdChart.setCrosshairPosition(
+                x,
+                macdContainer.clientHeight / 2
+              );
             }
           }
         } else {
           // 모든 차트에서 크로스헤어 제거
-          if (source !== 'price' && this.priceChart) this.priceChart.clearCrosshairPosition();
-          if (source !== 'volume' && this.volumeChart) this.volumeChart.clearCrosshairPosition();
+          if (source !== "price" && this.priceChart)
+            this.priceChart.clearCrosshairPosition();
+          if (source !== "volume" && this.volumeChart)
+            this.volumeChart.clearCrosshairPosition();
           if (this.rsiChart) this.rsiChart.clearCrosshairPosition();
           if (this.macdChart) this.macdChart.clearCrosshairPosition();
         }
       } catch (error) {
-        console.warn('크로스헤어 동기화 오류:', error);
+        console.warn("크로스헤어 동기화 오류:", error);
       } finally {
         this._crosshairSyncing = false;
       }
     };
 
     this.priceChart.subscribeCrosshairMove((param) => {
-      syncCrosshair(param, 'price');
+      syncCrosshair(param, "price");
     });
 
     this.volumeChart.subscribeCrosshairMove((param) => {
-      syncCrosshair(param, 'volume');
+      syncCrosshair(param, "volume");
     });
 
     // 5. 초기 차트 뷰 설정 (오른쪽은 최신 데이터이므로 여유 없음)
@@ -543,23 +561,31 @@ export class ChartManager {
     this.lastVolumeData = volumeData;
   }
 
-    // 🔧 보조지표 계산 메서드들
+  // 🔧 보조지표 계산 메서드들
   calculateBollingerBands(candleData, period = 20, multiplier = 2) {
     const result = { upper: [], middle: [], lower: [] };
-    
+
     for (let i = period - 1; i < candleData.length; i++) {
       const slice = candleData.slice(i - period + 1, i + 1);
-      const closes = slice.map(c => c.close);
+      const closes = slice.map((c) => c.close);
       const sma = closes.reduce((sum, close) => sum + close, 0) / period;
-      
-      const variance = closes.reduce((sum, close) => sum + Math.pow(close - sma, 2), 0) / period;
+
+      const variance =
+        closes.reduce((sum, close) => sum + Math.pow(close - sma, 2), 0) /
+        period;
       const stdDev = Math.sqrt(variance);
-      
+
       result.middle.push({ time: candleData[i].time, value: sma });
-      result.upper.push({ time: candleData[i].time, value: sma + (stdDev * multiplier) });
-      result.lower.push({ time: candleData[i].time, value: sma - (stdDev * multiplier) });
+      result.upper.push({
+        time: candleData[i].time,
+        value: sma + stdDev * multiplier,
+      });
+      result.lower.push({
+        time: candleData[i].time,
+        value: sma - stdDev * multiplier,
+      });
     }
-    
+
     return result;
   }
 
@@ -567,96 +593,176 @@ export class ChartManager {
     const result = [];
     const gains = [];
     const losses = [];
-    
+
     for (let i = 1; i < candleData.length; i++) {
       const change = candleData[i].close - candleData[i - 1].close;
       gains.push(change > 0 ? change : 0);
       losses.push(change < 0 ? -change : 0);
-      
+
       if (i >= period) {
-        const avgGain = gains.slice(-period).reduce((sum, gain) => sum + gain, 0) / period;
-        const avgLoss = losses.slice(-period).reduce((sum, loss) => sum + loss, 0) / period;
-        
+        const avgGain =
+          gains.slice(-period).reduce((sum, gain) => sum + gain, 0) / period;
+        const avgLoss =
+          losses.slice(-period).reduce((sum, loss) => sum + loss, 0) / period;
+
         const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
-        const rsi = 100 - (100 / (1 + rs));
-        
+        const rsi = 100 - 100 / (1 + rs);
+
         result.push({ time: candleData[i].time, value: rsi });
       }
     }
-    
+
     return result;
   }
 
-  calculateMACD(candleData, fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) {
-    // EMA 계산 함수
+  calculateMACD(
+    candleData,
+    fastPeriod = 12,
+    slowPeriod = 26,
+    signalPeriod = 9
+  ) {
+    // 🔧 디버깅: 입력 데이터 검증
+    console.log("MACD 계산 시작:", {
+      dataLength: candleData.length,
+      firstTime: candleData[0]?.time,
+      lastTime: candleData[candleData.length - 1]?.time,
+    });
+
+    // EMA 계산 함수 - 🔧 null 체크 강화
     const calculateEMA = (data, period) => {
-      const ema = [];
+      const ema = new Array(data.length); // 🔧 전체 길이로 초기화
       const multiplier = 2 / (period + 1);
-      
-      ema[0] = data[0];
-      for (let i = 1; i < data.length; i++) {
-        ema[i] = (data[i] * multiplier) + (ema[i - 1] * (1 - multiplier));
+
+      // 🔧 첫 번째 유효한 값 찾기
+      let firstValidIndex = 0;
+      while (
+        firstValidIndex < data.length &&
+        (data[firstValidIndex] == null || isNaN(data[firstValidIndex]))
+      ) {
+        firstValidIndex++;
       }
+
+      if (firstValidIndex >= data.length) return [];
+
+      // 🔧 초기값들을 모두 첫 번째 유효값으로 채움
+      for (let i = 0; i <= firstValidIndex; i++) {
+        ema[i] = data[firstValidIndex];
+      }
+
+      // 🔧 EMA 계산
+      for (let i = firstValidIndex + 1; i < data.length; i++) {
+        if (data[i] != null && !isNaN(data[i])) {
+          ema[i] = data[i] * multiplier + ema[i - 1] * (1 - multiplier);
+        } else {
+          ema[i] = ema[i - 1];
+        }
+      }
+
       return ema;
     };
-    
-    const closes = candleData.map(c => c.close);
+
+    const closes = candleData.map((c) => c.close);
     const fastEMA = calculateEMA(closes, fastPeriod);
     const slowEMA = calculateEMA(closes, slowPeriod);
-    
+
+    // 🔧 EMA 결과 검증
+    console.log("EMA 계산 결과:", {
+      fastEMALength: fastEMA.length,
+      slowEMALength: slowEMA.length,
+      fastEMAHasNull: fastEMA.some((v) => v == null || isNaN(v)),
+      slowEMAHasNull: slowEMA.some((v) => v == null || isNaN(v)),
+    });
+
     const macdLine = [];
     for (let i = 0; i < closes.length; i++) {
-      macdLine.push(fastEMA[i] - slowEMA[i]);
+      if (
+        fastEMA[i] != null &&
+        slowEMA[i] != null &&
+        !isNaN(fastEMA[i]) &&
+        !isNaN(slowEMA[i])
+      ) {
+        macdLine.push(fastEMA[i] - slowEMA[i]);
+      } else {
+        macdLine.push(0); // 🔧 null 대신 0으로 처리
+      }
     }
-    
+
     const signalLine = calculateEMA(macdLine, signalPeriod);
-    
+
     const result = {
       macd: [],
       signal: [],
-      histogram: []
+      histogram: [],
     };
-    
+
+    // 🔧 결과 데이터 검증 및 필터링
     for (let i = slowPeriod - 1; i < candleData.length; i++) {
       const time = candleData[i].time;
-      result.macd.push({ time, value: macdLine[i] });
-      result.signal.push({ time, value: signalLine[i] });
-      result.histogram.push({ 
-        time, 
-        value: macdLine[i] - signalLine[i],
-        color: macdLine[i] - signalLine[i] >= 0 ? '#26a69a' : '#ef5350'
-      });
+      const macdValue = macdLine[i];
+      const signalValue = signalLine[i];
+
+      // 🔧 유효한 값만 추가
+      if (
+        macdValue != null &&
+        signalValue != null &&
+        !isNaN(macdValue) &&
+        !isNaN(signalValue)
+      ) {
+        result.macd.push({ time, value: macdValue });
+        result.signal.push({ time, value: signalValue });
+
+        const histogramValue = macdValue - signalValue;
+        result.histogram.push({
+          time,
+          value: histogramValue,
+          color: histogramValue >= 0 ? "#26a69a" : "#ef5350",
+        });
+      }
     }
-    
+
+    // 🔧 최종 검증
+    console.log("MACD 최종 결과:", {
+      macdLength: result.macd.length,
+      signalLength: result.signal.length,
+      histogramLength: result.histogram.length,
+      hasNullValues: result.histogram.some(
+        (h) => h.value == null || isNaN(h.value)
+      ),
+    });
+
     return result;
   }
 
   // 🔧 보조지표 차트 생성 메서드들
   createRSIChart() {
-    const container = document.querySelector('#rsiChart .chart-content');
+    const container = document.querySelector("#rsiChart .chart-content");
     if (!container) return null;
-    
+
     this.rsiChart = LightweightCharts.createChart(container, {
       width: container.clientWidth,
       height: 95,
       layout: {
-        background: { type: 'solid', color: '#1a1a1a' },
-        textColor: '#e0e0e0',
+        background: { type: "solid", color: "#1a1a1a" },
+        textColor: "#e0e0e0",
       },
       grid: {
-        vertLines: { color: 'rgba(255, 255, 255, 0.1)' },
-        horzLines: { color: 'rgba(255, 255, 255, 0.1)' },
+        vertLines: { color: "rgba(255, 255, 255, 0.1)" },
+        horzLines: { color: "rgba(255, 255, 255, 0.1)" },
       },
-      timeScale: { 
+      timeScale: {
         visible: false,
         fixLeftEdge: true,
         fixRightEdge: true,
-        barSpacing: this.volumeChart ? this.volumeChart.timeScale().options().barSpacing : 6
+        barSpacing: this.volumeChart
+          ? this.volumeChart.timeScale().options().barSpacing
+          : 6,
       },
       rightPriceScale: {
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-        textColor: '#e0e0e0',
+        borderColor: "rgba(255, 255, 255, 0.1)",
+        textColor: "#e0e0e0",
         scaleMargins: { top: 0.1, bottom: 0.1 },
+        entireTextOnly: true, // 🔧 추가
+        minimumWidth: 80, // 🔧 추가
       },
       handleScroll: {
         mouseWheel: true,
@@ -665,12 +771,12 @@ export class ChartManager {
         vertTouchDrag: false,
       },
     });
-    
+
     this.rsiSeries = this.rsiChart.addLineSeries({
-      color: '#FFA500',
+      color: "#FFA500",
       lineWidth: 2,
     });
-    
+
     // 즉시 동기화 적용
     if (this.priceChart) {
       const currentRange = this.priceChart.timeScale().getVisibleLogicalRange();
@@ -678,19 +784,45 @@ export class ChartManager {
         this.rsiChart.timeScale().setVisibleLogicalRange(currentRange);
       }
     }
-    
-    // 크로스헤어 동기화 이벤트 추가
+
+    this.rsiChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+      if (this._syncing) return;
+      this._syncing = true;
+      try {
+        if (this.priceChart)
+          this.priceChart.timeScale().setVisibleLogicalRange(range);
+        if (this.volumeChart)
+          this.volumeChart.timeScale().setVisibleLogicalRange(range);
+        if (this.macdChart)
+          this.macdChart.timeScale().setVisibleLogicalRange(range);
+      } finally {
+        this._syncing = false;
+      }
+    });
+
+    // 크로스헤어 동기화만 유지
     this.rsiChart.subscribeCrosshairMove((param) => {
       if (this._crosshairSyncing) return;
       this._crosshairSyncing = true;
       try {
         if (param.point && this.priceChart) {
-          this.priceChart.setCrosshairPosition(param.point.x, document.getElementById('priceChart').clientHeight / 2);
-          this.volumeChart.setCrosshairPosition(param.point.x, document.getElementById('volumeChart').clientHeight / 2);
+          this.priceChart.setCrosshairPosition(
+            param.point.x,
+            document.getElementById("priceChart").clientHeight / 2
+          );
+          this.volumeChart.setCrosshairPosition(
+            param.point.x,
+            document.getElementById("volumeChart").clientHeight / 2
+          );
           if (this.macdChart) {
-            const macdContainer = document.querySelector('#macdChart .chart-content');
+            const macdContainer = document.querySelector(
+              "#macdChart .chart-content"
+            );
             if (macdContainer) {
-              this.macdChart.setCrosshairPosition(param.point.x, macdContainer.clientHeight / 2);
+              this.macdChart.setCrosshairPosition(
+                param.point.x,
+                macdContainer.clientHeight / 2
+              );
             }
           }
         } else if (!param.point) {
@@ -707,30 +839,34 @@ export class ChartManager {
   }
 
   createMACDChart() {
-    const container = document.querySelector('#macdChart .chart-content');
+    const container = document.querySelector("#macdChart .chart-content");
     if (!container) return null;
-    
+
     this.macdChart = LightweightCharts.createChart(container, {
       width: container.clientWidth,
       height: 95,
       layout: {
-        background: { type: 'solid', color: '#1a1a1a' },
-        textColor: '#e0e0e0',
+        background: { type: "solid", color: "#1a1a1a" },
+        textColor: "#e0e0e0",
       },
       grid: {
-        vertLines: { color: 'rgba(255, 255, 255, 0.1)' },
-        horzLines: { color: 'rgba(255, 255, 255, 0.1)' },
+        vertLines: { color: "rgba(255, 255, 255, 0.1)" },
+        horzLines: { color: "rgba(255, 255, 255, 0.1)" },
       },
-      timeScale: { 
+      timeScale: {
         visible: false,
         fixLeftEdge: true,
         fixRightEdge: true,
-        barSpacing: this.volumeChart ? this.volumeChart.timeScale().options().barSpacing : 6
+        barSpacing: this.volumeChart
+          ? this.volumeChart.timeScale().options().barSpacing
+          : 6,
       },
       rightPriceScale: {
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-        textColor: '#e0e0e0',
+        borderColor: "rgba(255, 255, 255, 0.1)",
+        textColor: "#e0e0e0",
         scaleMargins: { top: 0.1, bottom: 0.1 },
+        entireTextOnly: true, // 🔧 추가
+        minimumWidth: 80, // 🔧 추가
       },
       handleScroll: {
         mouseWheel: true,
@@ -739,19 +875,24 @@ export class ChartManager {
         vertTouchDrag: false,
       },
     });
-    
+
     this.macdSeries = this.macdChart.addLineSeries({
-      color: '#2196F3',
+      color: "#2196F3",
       lineWidth: 2,
+      priceFormat: {
+        type: "price",
+        precision: 0,
+        minMove: 1,
+      },
     });
-    
+
     this.macdSignalSeries = this.macdChart.addLineSeries({
-      color: '#FF9800',
+      color: "#FF9800",
       lineWidth: 2,
     });
-    
+
     this.macdHistogramSeries = this.macdChart.addHistogramSeries({
-      color: '#26a69a',
+      color: "#26a69a",
     });
 
     // 즉시 동기화 적용
@@ -761,19 +902,45 @@ export class ChartManager {
         this.macdChart.timeScale().setVisibleLogicalRange(currentRange);
       }
     }
-    
-    // 크로스헤어 동기화 이벤트 추가
+
+    this.macdChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+      if (this._syncing) return;
+      this._syncing = true;
+      try {
+        if (this.priceChart)
+          this.priceChart.timeScale().setVisibleLogicalRange(range);
+        if (this.volumeChart)
+          this.volumeChart.timeScale().setVisibleLogicalRange(range);
+        if (this.rsiChart)
+          this.rsiChart.timeScale().setVisibleLogicalRange(range);
+      } finally {
+        this._syncing = false;
+      }
+    });
+
+    // 크로스헤어 동기화만 유지
     this.macdChart.subscribeCrosshairMove((param) => {
       if (this._crosshairSyncing) return;
       this._crosshairSyncing = true;
       try {
         if (param.point && this.priceChart) {
-          this.priceChart.setCrosshairPosition(param.point.x, document.getElementById('priceChart').clientHeight / 2);
-          this.volumeChart.setCrosshairPosition(param.point.x, document.getElementById('volumeChart').clientHeight / 2);
+          this.priceChart.setCrosshairPosition(
+            param.point.x,
+            document.getElementById("priceChart").clientHeight / 2
+          );
+          this.volumeChart.setCrosshairPosition(
+            param.point.x,
+            document.getElementById("volumeChart").clientHeight / 2
+          );
           if (this.rsiChart) {
-            const rsiContainer = document.querySelector('#rsiChart .chart-content');
+            const rsiContainer = document.querySelector(
+              "#rsiChart .chart-content"
+            );
             if (rsiContainer) {
-              this.rsiChart.setCrosshairPosition(param.point.x, rsiContainer.clientHeight / 2);
+              this.rsiChart.setCrosshairPosition(
+                param.point.x,
+                rsiContainer.clientHeight / 2
+              );
             }
           }
         } else if (!param.point) {
@@ -785,7 +952,7 @@ export class ChartManager {
         this._crosshairSyncing = false;
       }
     });
-    
+
     return this.macdChart;
   }
 
@@ -886,7 +1053,7 @@ export class ChartManager {
     this.priceSeries = null;
     this.volumeSeries = null;
     this.indicatorSeries = {};
-        // 🔧 보조지표 차트들 정리
+    // 🔧 보조지표 차트들 정리
     if (this.rsiChart) {
       this.rsiChart.remove();
       this.rsiChart = null;
@@ -899,7 +1066,7 @@ export class ChartManager {
       this.macdSignalSeries = null;
       this.macdHistogramSeries = null;
     }
-    
+
     // 볼린저밴드 시리즈 정리
     this.bbUpperSeries = null;
     this.bbLowerSeries = null;
@@ -1071,9 +1238,17 @@ export class ChartManager {
   }
 
   appendHistoricalData(newData) {
+    console.log("🔍 appendHistoricalData 시작", {
+      newDataLength: newData.length,
+      hasLastCandleData: !!this.lastCandleData,
+      lastCandleDataLength: this.lastCandleData?.length || 0,
+    });
+
     const sortedNewData = newData.reverse();
     const newCandleData = [];
     const newVolumeData = [];
+
+    console.log("🔍 데이터 처리 시작");
 
     for (let i = 0; i < sortedNewData.length; i++) {
       const d = sortedNewData[i];
@@ -1120,23 +1295,80 @@ export class ChartManager {
       });
     }
 
+    console.log("🔍 데이터 처리 완료", {
+      newCandleDataLength: newCandleData.length,
+      newVolumeDataLength: newVolumeData.length,
+    });
+
     newCandleData.sort((a, b) => a.time - b.time);
     newVolumeData.sort((a, b) => a.time - b.time);
 
+    console.log("🔍 가격 시리즈 업데이트 시작");
     if (this.priceSeries && newCandleData.length > 0) {
       const existingData = this.lastCandleData || [];
       const combinedData = [...newCandleData, ...existingData];
+      console.log("🔍 가격 데이터 결합", {
+        newLength: newCandleData.length,
+        existingLength: existingData.length,
+        combinedLength: combinedData.length,
+      });
       this.priceSeries.setData(combinedData);
       this.lastCandleData = combinedData;
+      console.log("🔍 가격 시리즈 업데이트 완료");
     }
 
+    console.log("🔍 볼륨 시리즈 업데이트 시작");
     if (this.volumeSeries && newVolumeData.length > 0) {
       this.volumeSeries.setData([
         ...newVolumeData,
         ...(this.lastVolumeData || []),
       ]);
       this.lastVolumeData = [...newVolumeData, ...(this.lastVolumeData || [])];
+      console.log("🔍 볼륨 시리즈 업데이트 완료");
     }
+
+    // RSI/MACD 차트 업데이트 추가
+    if (newCandleData.length > 0) {
+      console.log("🔍 RSI/MACD 업데이트 준비");
+      const allCandleData = [...newCandleData, ...this.lastCandleData];
+
+      // 🔧 중복 제거 - 시간 기준으로 유니크하게
+      const uniqueCandleData = allCandleData
+        .reduce((acc, current) => {
+          const existing = acc.find((item) => item.time === current.time);
+          if (!existing) {
+            acc.push(current);
+          }
+          return acc;
+        }, [])
+        .sort((a, b) => a.time - b.time);
+
+      console.log("🔍 중복 제거 후 데이터 상태", {
+        beforeLength: allCandleData.length,
+        afterLength: uniqueCandleData.length,
+        removedDuplicates: allCandleData.length - uniqueCandleData.length,
+      });
+
+      // RSI 업데이트
+      if (this.rsiSeries) {
+        const rsiData = this.calculateRSI(uniqueCandleData, 14);
+        this.rsiSeries.setData(rsiData);
+      }
+
+      // MACD 업데이트
+      if (
+        this.macdSeries &&
+        this.macdSignalSeries &&
+        this.macdHistogramSeries
+      ) {
+        const macdData = this.calculateMACD(uniqueCandleData);
+        this.macdSeries.setData(macdData.macd);
+        this.macdSignalSeries.setData(macdData.signal);
+        this.macdHistogramSeries.setData(macdData.histogram);
+      }
+    }
+
+    console.log("🔍 appendHistoricalData 완료");
   }
 
   calculateNonOverlappingTime(allCandleData) {
@@ -1216,122 +1448,137 @@ export class ChartManager {
   addIndicator(type) {
     if (!this.priceChart || !this.lastCandleData) return null;
 
-    if (type === 'RSI') {
+    if (type === "RSI") {
       if (!this.rsiChart) {
         this.createRSIChart();
       }
-      
+
       const rsiData = this.calculateRSI(this.lastCandleData, 14);
       if (rsiData.length > 0) {
         this.rsiSeries.setData(rsiData);
       }
-      
-      // 생성 직후 강제 동기화
+
       setTimeout(() => {
         if (this.priceChart && this.rsiChart) {
-          const currentRange = this.priceChart.timeScale().getVisibleLogicalRange();
+          const currentRange = this.priceChart
+            .timeScale()
+            .getVisibleLogicalRange();
+          const priceBarSpacing = this.priceChart
+            .timeScale()
+            .options().barSpacing;
           if (currentRange) {
             this.rsiChart.timeScale().setVisibleLogicalRange(currentRange);
+            this.rsiChart
+              .timeScale()
+              .applyOptions({ barSpacing: priceBarSpacing });
           }
         }
-      }, 100);
-      
-      console.log('RSI 차트 활성화됨');
+      }, 200);
+
+      console.log("RSI 차트 활성화됨");
       return this.rsiSeries;
-      
-    } else if (type === 'MACD') {
+    } else if (type === "MACD") {
       if (!this.macdChart) {
         this.createMACDChart();
       }
-      
+
       const macdData = this.calculateMACD(this.lastCandleData);
       if (macdData.macd.length > 0) {
         this.macdSeries.setData(macdData.macd);
         this.macdSignalSeries.setData(macdData.signal);
         this.macdHistogramSeries.setData(macdData.histogram);
       }
-      
+
       // 생성 직후 강제 동기화
       setTimeout(() => {
-        if (this.priceChart && this.macdChart) {
-          const currentRange = this.priceChart.timeScale().getVisibleLogicalRange();
+        if (this.priceChart && this.rsiChart) {
+          const currentRange = this.priceChart
+            .timeScale()
+            .getVisibleLogicalRange();
+          const priceBarSpacing = this.priceChart
+            .timeScale()
+            .options().barSpacing;
           if (currentRange) {
-            this.macdChart.timeScale().setVisibleLogicalRange(currentRange);
+            this.rsiChart.timeScale().setVisibleLogicalRange(currentRange);
+            this.rsiChart
+              .timeScale()
+              .applyOptions({ barSpacing: priceBarSpacing });
           }
         }
-      }, 100);
-      
-      console.log('MACD 차트 활성화됨');
-      return { macd: this.macdSeries, signal: this.macdSignalSeries, histogram: this.macdHistogramSeries };
-      
-    } else if (type === 'BB') {
+      }, 200);
+
+      console.log("MACD 차트 활성화됨");
+      return {
+        macd: this.macdSeries,
+        signal: this.macdSignalSeries,
+        histogram: this.macdHistogramSeries,
+      };
+    } else if (type === "BB") {
       const bbData = this.calculateBollingerBands(this.lastCandleData, 20, 2);
-      
+
       this.bbUpperSeries = this.priceChart.addLineSeries({
-        color: 'rgba(255, 255, 255, 0.5)',
+        color: "rgba(255, 255, 255, 0.5)",
         lineWidth: 1,
-        title: 'BB Upper',
+        title: "BB Upper",
       });
-      
+
       this.bbMiddleSeries = this.priceChart.addLineSeries({
-        color: 'rgba(255, 255, 255, 0.3)',
+        color: "rgba(255, 255, 255, 0.3)",
         lineWidth: 1,
-        title: 'BB Middle',
+        title: "BB Middle",
       });
-      
+
       this.bbLowerSeries = this.priceChart.addLineSeries({
-        color: 'rgba(255, 255, 255, 0.5)',
+        color: "rgba(255, 255, 255, 0.5)",
         lineWidth: 1,
-        title: 'BB Lower',
+        title: "BB Lower",
       });
-      
+
       this.bbUpperSeries.setData(bbData.upper);
       this.bbMiddleSeries.setData(bbData.middle);
       this.bbLowerSeries.setData(bbData.lower);
-      
-      this.indicatorSeries['BB'] = {
+
+      this.indicatorSeries["BB"] = {
         upper: this.bbUpperSeries,
         middle: this.bbMiddleSeries,
-        lower: this.bbLowerSeries
+        lower: this.bbLowerSeries,
       };
-      
-      console.log('볼린저밴드 추가됨');
-      return this.indicatorSeries['BB'];
+
+      console.log("볼린저밴드 추가됨");
+      return this.indicatorSeries["BB"];
     }
 
     return null;
   }
 
   removeIndicator(type) {
-    if (type === 'RSI' && this.rsiChart) {
+    if (type === "RSI" && this.rsiChart) {
       this.rsiChart.remove();
       this.rsiChart = null;
       this.rsiSeries = null;
-      console.log('RSI 차트 제거됨');
+      console.log("RSI 차트 제거됨");
       return true;
-      
-    } else if (type === 'MACD' && this.macdChart) {
+    } else if (type === "MACD" && this.macdChart) {
       this.macdChart.remove();
       this.macdChart = null;
       this.macdSeries = null;
       this.macdSignalSeries = null;
       this.macdHistogramSeries = null;
-      console.log('MACD 차트 제거됨');
+      console.log("MACD 차트 제거됨");
       return true;
-      
-    } else if (type === 'BB' && this.indicatorSeries['BB']) {
-      const bb = this.indicatorSeries['BB'];
+    } else if (type === "BB" && this.indicatorSeries["BB"]) {
+      const bb = this.indicatorSeries["BB"];
       this.priceChart.removeSeries(bb.upper);
       this.priceChart.removeSeries(bb.middle);
       this.priceChart.removeSeries(bb.lower);
-      delete this.indicatorSeries['BB'];
+      delete this.indicatorSeries["BB"];
       this.bbUpperSeries = null;
       this.bbMiddleSeries = null;
       this.bbLowerSeries = null;
-      console.log('볼린저밴드 제거됨');
+      console.log("볼린저밴드 제거됨");
       return true;
     }
-    
+
     return false;
   }
 
