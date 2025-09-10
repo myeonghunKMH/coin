@@ -750,7 +750,7 @@ export class ChartManager {
         horzLines: { color: "rgba(255, 255, 255, 0.1)" },
       },
       timeScale: {
-        visible: false,
+        visible: false, // 🔧 X축 완전 숨김
         fixLeftEdge: true,
         fixRightEdge: true,
         barSpacing: this.volumeChart
@@ -854,7 +854,7 @@ export class ChartManager {
         horzLines: { color: "rgba(255, 255, 255, 0.1)" },
       },
       timeScale: {
-        visible: false,
+        visible: false, // 🔧 X축 완전 숨김
         fixLeftEdge: true,
         fixRightEdge: true,
         barSpacing: this.volumeChart
