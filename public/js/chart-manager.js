@@ -24,6 +24,110 @@ export class ChartManager {
     this.isLoadingMore = false;
     this._syncing = false;
     this._crosshairSyncing = false;
+    this._preservedViewport = null;
+    this._isIndicatorCreating = false;
+    this._chartCreationQueue = [];
+  }
+
+  // 🔧 새로운 비동기 헬퍼 메서드들
+  async waitForChartReady(chart, maxWait = 2000) {
+    return new Promise((resolve) => {
+      if (!chart) {
+        resolve(false);
+        return;
+      }
+
+      const startTime = Date.now();
+      const checkReady = () => {
+        try {
+          const timeScale = chart.timeScale();
+          const priceScale = chart.priceScale();
+
+          if (timeScale && priceScale) {
+            console.log("✅ 차트 준비 완료");
+            resolve(true);
+          } else if (Date.now() - startTime > maxWait) {
+            console.warn("⚠️ 차트 준비 시간 초과");
+            resolve(false);
+          } else {
+            setTimeout(checkReady, 50);
+          }
+        } catch (error) {
+          if (Date.now() - startTime > maxWait) {
+            console.warn("⚠️ 차트 준비 실패:", error);
+            resolve(false);
+          } else {
+            setTimeout(checkReady, 50);
+          }
+        }
+      };
+      checkReady();
+    });
+  }
+
+  async waitForDataSet(series, data, maxWait = 1000) {
+    return new Promise((resolve) => {
+      if (!series || !data) {
+        resolve(false);
+        return;
+      }
+
+      try {
+        series.setData(data);
+        console.log("✅ 데이터 설정 완료");
+        setTimeout(() => resolve(true), 100);
+      } catch (error) {
+        console.warn("⚠️ 데이터 설정 실패:", error);
+        resolve(false);
+      }
+    });
+  }
+
+  preserveCurrentViewport() {
+    if (this.priceChart) {
+      try {
+        this._preservedViewport = {
+          logicalRange: this.priceChart.timeScale().getVisibleLogicalRange(),
+          barSpacing: this.priceChart.timeScale().options().barSpacing,
+          timestamp: Date.now(),
+        };
+        console.log("🔒 뷰포인트 보존:", this._preservedViewport.logicalRange);
+      } catch (error) {
+        console.warn("뷰포인트 보존 실패:", error);
+      }
+    }
+  }
+
+  async restorePreservedViewport(targetChart) {
+    if (!this._preservedViewport || !targetChart) return false;
+
+    try {
+      if (this.priceChart && this._preservedViewport.logicalRange) {
+        this.priceChart
+          .timeScale()
+          .setVisibleLogicalRange(this._preservedViewport.logicalRange);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      if (this._preservedViewport.logicalRange) {
+        targetChart
+          .timeScale()
+          .setVisibleLogicalRange(this._preservedViewport.logicalRange);
+
+        if (this._preservedViewport.barSpacing) {
+          targetChart.timeScale().applyOptions({
+            barSpacing: this._preservedViewport.barSpacing,
+          });
+        }
+      }
+
+      console.log("✅ 뷰포인트 복원 완료");
+      return true;
+    } catch (error) {
+      console.warn("뷰포인트 복원 실패:", error);
+      return false;
+    }
   }
 
   async fetchAndRender() {
@@ -734,59 +838,81 @@ export class ChartManager {
   }
 
   // 🔧 보조지표 차트 생성 메서드들
-  createRSIChart() {
+  async createRSIChart() {
     const container = document.querySelector("#rsiChart .chart-content");
     if (!container) return null;
 
-    this.rsiChart = LightweightCharts.createChart(container, {
-      width: container.clientWidth,
-      height: 95,
-      layout: {
-        background: { type: "solid", color: "#1a1a1a" },
-        textColor: "#e0e0e0",
-      },
-      grid: {
-        vertLines: { color: "rgba(255, 255, 255, 0.1)" },
-        horzLines: { color: "rgba(255, 255, 255, 0.1)" },
-      },
-      timeScale: {
-        visible: false, // 🔧 X축 완전 숨김
-        fixLeftEdge: true,
-        fixRightEdge: true,
-        barSpacing: this.volumeChart
-          ? this.volumeChart.timeScale().options().barSpacing
-          : 6,
-      },
-      rightPriceScale: {
-        borderColor: "rgba(255, 255, 255, 0.1)",
-        textColor: "#e0e0e0",
-        scaleMargins: { top: 0.1, bottom: 0.1 },
-        entireTextOnly: true, // 🔧 추가
-        minimumWidth: 80, // 🔧 추가
-      },
-      handleScroll: {
-        mouseWheel: true,
-        pressedMouseMove: true,
-        horzTouchDrag: true,
-        vertTouchDrag: false,
-      },
-    });
+    console.log("🔄 RSI 차트 생성 시작...");
+    this._isIndicatorCreating = true;
+    this.preserveCurrentViewport();
 
-    this.rsiSeries = this.rsiChart.addLineSeries({
-      color: "#FFA500",
-      lineWidth: 2,
-    });
+    try {
+      this.rsiChart = LightweightCharts.createChart(container, {
+        width: container.clientWidth,
+        height: 95,
+        layout: {
+          background: { type: "solid", color: "#1a1a1a" },
+          textColor: "#e0e0e0",
+        },
+        grid: {
+          vertLines: { color: "rgba(255, 255, 255, 0.1)" },
+          horzLines: { color: "rgba(255, 255, 255, 0.1)" },
+        },
+        timeScale: {
+          visible: false,
+          fixLeftEdge: true,
+          fixRightEdge: true,
+          barSpacing: this.priceChart
+            ? this.priceChart.timeScale().options().barSpacing
+            : 6,
+        },
+        rightPriceScale: {
+          borderColor: "rgba(255, 255, 255, 0.1)",
+          textColor: "#e0e0e0",
+          scaleMargins: { top: 0.1, bottom: 0.1 },
+          entireTextOnly: true,
+          minimumWidth: 80,
+        },
+        handleScroll: {
+          mouseWheel: true,
+          pressedMouseMove: true,
+          horzTouchDrag: true,
+          vertTouchDrag: false,
+        },
+      });
 
-    // 즉시 동기화 적용
-    if (this.priceChart) {
-      const currentRange = this.priceChart.timeScale().getVisibleLogicalRange();
-      if (currentRange) {
-        this.rsiChart.timeScale().setVisibleLogicalRange(currentRange);
+      const isChartReady = await this.waitForChartReady(this.rsiChart);
+      if (!isChartReady) return null;
+
+      this.rsiSeries = this.rsiChart.addLineSeries({
+        color: "#FFA500",
+        lineWidth: 2,
+      });
+
+      if (this.lastCandleData && this.lastCandleData.length > 0) {
+        const rsiData = this.calculateRSI(this.lastCandleData, 14);
+        await this.waitForDataSet(this.rsiSeries, rsiData);
       }
+
+      await this.restorePreservedViewport(this.rsiChart);
+      this.setupRSIEventListeners();
+
+      console.log("✅ RSI 차트 생성 완료");
+      return this.rsiChart;
+    } catch (error) {
+      console.error("RSI 차트 생성 중 오류:", error);
+      return null;
+    } finally {
+      this._isIndicatorCreating = false;
     }
+  }
+
+  setupRSIEventListeners() {
+    if (!this.rsiChart) return;
 
     this.rsiChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-      if (this._syncing) return;
+      if (this._syncing || this._isIndicatorCreating) return;
+
       this._syncing = true;
       try {
         if (this.priceChart)
@@ -800,9 +926,9 @@ export class ChartManager {
       }
     });
 
-    // 크로스헤어 동기화만 유지
     this.rsiChart.subscribeCrosshairMove((param) => {
       if (this._crosshairSyncing) return;
+
       this._crosshairSyncing = true;
       try {
         if (param.point && this.priceChart) {
@@ -810,7 +936,7 @@ export class ChartManager {
             param.point.x,
             document.getElementById("priceChart").clientHeight / 2
           );
-          this.volumeChart.setCrosshairPosition(
+          this.volumeChart?.setCrosshairPosition(
             param.point.x,
             document.getElementById("volumeChart").clientHeight / 2
           );
@@ -834,77 +960,96 @@ export class ChartManager {
         this._crosshairSyncing = false;
       }
     });
-
-    return this.rsiChart;
   }
 
-  createMACDChart() {
+  async createMACDChart() {
     const container = document.querySelector("#macdChart .chart-content");
     if (!container) return null;
 
-    this.macdChart = LightweightCharts.createChart(container, {
-      width: container.clientWidth,
-      height: 95,
-      layout: {
-        background: { type: "solid", color: "#1a1a1a" },
-        textColor: "#e0e0e0",
-      },
-      grid: {
-        vertLines: { color: "rgba(255, 255, 255, 0.1)" },
-        horzLines: { color: "rgba(255, 255, 255, 0.1)" },
-      },
-      timeScale: {
-        visible: false, // 🔧 X축 완전 숨김
-        fixLeftEdge: true,
-        fixRightEdge: true,
-        barSpacing: this.volumeChart
-          ? this.volumeChart.timeScale().options().barSpacing
-          : 6,
-      },
-      rightPriceScale: {
-        borderColor: "rgba(255, 255, 255, 0.1)",
-        textColor: "#e0e0e0",
-        scaleMargins: { top: 0.1, bottom: 0.1 },
-        entireTextOnly: true, // 🔧 추가
-        minimumWidth: 80, // 🔧 추가
-      },
-      handleScroll: {
-        mouseWheel: true,
-        pressedMouseMove: true,
-        horzTouchDrag: true,
-        vertTouchDrag: false,
-      },
-    });
+    console.log("🔄 MACD 차트 생성 시작...");
+    this._isIndicatorCreating = true;
+    this.preserveCurrentViewport();
 
-    this.macdSeries = this.macdChart.addLineSeries({
-      color: "#2196F3",
-      lineWidth: 2,
-      priceFormat: {
-        type: "price",
-        precision: 0,
-        minMove: 1,
-      },
-    });
+    try {
+      this.macdChart = LightweightCharts.createChart(container, {
+        width: container.clientWidth,
+        height: 95,
+        layout: {
+          background: { type: "solid", color: "#1a1a1a" },
+          textColor: "#e0e0e0",
+        },
+        grid: {
+          vertLines: { color: "rgba(255, 255, 255, 0.1)" },
+          horzLines: { color: "rgba(255, 255, 255, 0.1)" },
+        },
+        timeScale: {
+          visible: false,
+          fixLeftEdge: true,
+          fixRightEdge: true,
+          barSpacing: this.priceChart
+            ? this.priceChart.timeScale().options().barSpacing
+            : 6,
+        },
+        rightPriceScale: {
+          borderColor: "rgba(255, 255, 255, 0.1)",
+          textColor: "#e0e0e0",
+          scaleMargins: { top: 0.1, bottom: 0.1 },
+          entireTextOnly: true,
+          minimumWidth: 80,
+        },
+        handleScroll: {
+          mouseWheel: true,
+          pressedMouseMove: true,
+          horzTouchDrag: true,
+          vertTouchDrag: false,
+        },
+      });
 
-    this.macdSignalSeries = this.macdChart.addLineSeries({
-      color: "#FF9800",
-      lineWidth: 2,
-    });
+      const isChartReady = await this.waitForChartReady(this.macdChart);
+      if (!isChartReady) return null;
 
-    this.macdHistogramSeries = this.macdChart.addHistogramSeries({
-      color: "#26a69a",
-    });
+      this.macdSeries = this.macdChart.addLineSeries({
+        color: "#2196F3",
+        lineWidth: 2,
+        priceFormat: { type: "price", precision: 0, minMove: 1 },
+      });
 
-    // 즉시 동기화 적용
-    if (this.priceChart) {
-      const currentRange = this.priceChart.timeScale().getVisibleLogicalRange();
-      if (currentRange) {
-        this.macdChart.timeScale().setVisibleLogicalRange(currentRange);
+      this.macdSignalSeries = this.macdChart.addLineSeries({
+        color: "#FF9800",
+        lineWidth: 2,
+      });
+
+      this.macdHistogramSeries = this.macdChart.addHistogramSeries({
+        color: "#26a69a",
+      });
+
+      if (this.lastCandleData && this.lastCandleData.length > 0) {
+        const macdData = this.calculateMACD(this.lastCandleData);
+
+        await this.waitForDataSet(this.macdSeries, macdData.macd);
+        await this.waitForDataSet(this.macdSignalSeries, macdData.signal);
+        await this.waitForDataSet(this.macdHistogramSeries, macdData.histogram);
       }
+
+      await this.restorePreservedViewport(this.macdChart);
+      this.setupMACDEventListeners();
+
+      console.log("✅ MACD 차트 생성 완료");
+      return this.macdChart;
+    } catch (error) {
+      console.error("MACD 차트 생성 중 오류:", error);
+      return null;
+    } finally {
+      this._isIndicatorCreating = false;
     }
+  }
+
+  setupMACDEventListeners() {
+    if (!this.macdChart) return;
 
     this.macdChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-      if (this._syncing) return;
+      if (this._syncing || this._isIndicatorCreating) return;
+
       this._syncing = true;
       try {
         if (this.priceChart)
@@ -918,9 +1063,9 @@ export class ChartManager {
       }
     });
 
-    // 크로스헤어 동기화만 유지
     this.macdChart.subscribeCrosshairMove((param) => {
       if (this._crosshairSyncing) return;
+
       this._crosshairSyncing = true;
       try {
         if (param.point && this.priceChart) {
@@ -928,7 +1073,7 @@ export class ChartManager {
             param.point.x,
             document.getElementById("priceChart").clientHeight / 2
           );
-          this.volumeChart.setCrosshairPosition(
+          this.volumeChart?.setCrosshairPosition(
             param.point.x,
             document.getElementById("volumeChart").clientHeight / 2
           );
@@ -952,8 +1097,6 @@ export class ChartManager {
         this._crosshairSyncing = false;
       }
     });
-
-    return this.macdChart;
   }
 
   addIndicatorToMainChart(ma5Data, ma20Data) {
@@ -1445,107 +1588,72 @@ export class ChartManager {
     return false;
   }
 
-  addIndicator(type) {
-    if (!this.priceChart || !this.lastCandleData) return null;
+  async addIndicator(type) {
+    if (!this.priceChart || !this.lastCandleData) {
+      console.warn("차트 또는 데이터가 준비되지 않음");
+      return null;
+    }
 
-    if (type === "RSI") {
-      if (!this.rsiChart) {
-        this.createRSIChart();
-      }
-
-      const rsiData = this.calculateRSI(this.lastCandleData, 14);
-      if (rsiData.length > 0) {
-        this.rsiSeries.setData(rsiData);
-      }
-
-      setTimeout(() => {
-        if (this.priceChart && this.rsiChart) {
-          const currentRange = this.priceChart
-            .timeScale()
-            .getVisibleLogicalRange();
-          const priceBarSpacing = this.priceChart
-            .timeScale()
-            .options().barSpacing;
-          if (currentRange) {
-            this.rsiChart.timeScale().setVisibleLogicalRange(currentRange);
-            this.rsiChart
-              .timeScale()
-              .applyOptions({ barSpacing: priceBarSpacing });
-          }
+    try {
+      if (type === "RSI") {
+        if (!this.rsiChart) {
+          await this.createRSIChart();
+          return this.rsiSeries;
         }
-      }, 200);
-
-      console.log("RSI 차트 활성화됨");
-      return this.rsiSeries;
-    } else if (type === "MACD") {
-      if (!this.macdChart) {
-        this.createMACDChart();
-      }
-
-      const macdData = this.calculateMACD(this.lastCandleData);
-      if (macdData.macd.length > 0) {
-        this.macdSeries.setData(macdData.macd);
-        this.macdSignalSeries.setData(macdData.signal);
-        this.macdHistogramSeries.setData(macdData.histogram);
-      }
-
-      // 생성 직후 강제 동기화
-      setTimeout(() => {
-        if (this.priceChart && this.rsiChart) {
-          const currentRange = this.priceChart
-            .timeScale()
-            .getVisibleLogicalRange();
-          const priceBarSpacing = this.priceChart
-            .timeScale()
-            .options().barSpacing;
-          if (currentRange) {
-            this.rsiChart.timeScale().setVisibleLogicalRange(currentRange);
-            this.rsiChart
-              .timeScale()
-              .applyOptions({ barSpacing: priceBarSpacing });
-          }
+      } else if (type === "MACD") {
+        if (!this.macdChart) {
+          await this.createMACDChart();
+          return {
+            macd: this.macdSeries,
+            signal: this.macdSignalSeries,
+            histogram: this.macdHistogramSeries,
+          };
         }
-      }, 200);
+      } else if (type === "BB") {
+        this.preserveCurrentViewport();
 
-      console.log("MACD 차트 활성화됨");
-      return {
-        macd: this.macdSeries,
-        signal: this.macdSignalSeries,
-        histogram: this.macdHistogramSeries,
-      };
-    } else if (type === "BB") {
-      const bbData = this.calculateBollingerBands(this.lastCandleData, 20, 2);
+        const bbData = this.calculateBollingerBands(this.lastCandleData, 20, 2);
 
-      this.bbUpperSeries = this.priceChart.addLineSeries({
-        color: "rgba(255, 255, 255, 0.5)",
-        lineWidth: 1,
-        title: "BB Upper",
-      });
+        this.bbUpperSeries = this.priceChart.addLineSeries({
+          color: "rgba(255, 255, 255, 0.5)",
+          lineWidth: 1,
+          title: "BB Upper",
+        });
 
-      this.bbMiddleSeries = this.priceChart.addLineSeries({
-        color: "rgba(255, 255, 255, 0.3)",
-        lineWidth: 1,
-        title: "BB Middle",
-      });
+        this.bbMiddleSeries = this.priceChart.addLineSeries({
+          color: "rgba(255, 255, 255, 0.3)",
+          lineWidth: 1,
+          title: "BB Middle",
+        });
 
-      this.bbLowerSeries = this.priceChart.addLineSeries({
-        color: "rgba(255, 255, 255, 0.5)",
-        lineWidth: 1,
-        title: "BB Lower",
-      });
+        this.bbLowerSeries = this.priceChart.addLineSeries({
+          color: "rgba(255, 255, 255, 0.5)",
+          lineWidth: 1,
+          title: "BB Lower",
+        });
 
-      this.bbUpperSeries.setData(bbData.upper);
-      this.bbMiddleSeries.setData(bbData.middle);
-      this.bbLowerSeries.setData(bbData.lower);
+        this.bbUpperSeries.setData(bbData.upper);
+        this.bbMiddleSeries.setData(bbData.middle);
+        this.bbLowerSeries.setData(bbData.lower);
 
-      this.indicatorSeries["BB"] = {
-        upper: this.bbUpperSeries,
-        middle: this.bbMiddleSeries,
-        lower: this.bbLowerSeries,
-      };
+        this.indicatorSeries["BB"] = {
+          upper: this.bbUpperSeries,
+          middle: this.bbMiddleSeries,
+          lower: this.bbLowerSeries,
+        };
 
-      console.log("볼린저밴드 추가됨");
-      return this.indicatorSeries["BB"];
+        if (this._preservedViewport?.logicalRange) {
+          this.priceChart
+            .timeScale()
+            .setVisibleLogicalRange(this._preservedViewport.logicalRange);
+        }
+
+        console.log("✅ 볼린저밴드 추가 완료");
+        return this.indicatorSeries["BB"];
+      }
+    } catch (error) {
+      console.error(`${type} 지표 추가 실패:`, error);
+      return null;
     }
 
     return null;
