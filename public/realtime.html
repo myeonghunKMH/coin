@@ -2,7 +2,7 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <title>실시간 암호화폐 모의투자 (TradingView)</title>
+    <title>실시간 암호화폐 모의투자</title>
     <link rel="stylesheet" href="css/common.css" />
     <link rel="stylesheet" href="css/realtime.css" />
     <!-- TradingView Lightweight Charts -->
@@ -11,6 +11,22 @@
   </head>
 
   <body>
+    <!-- 🔧 새로 추가: 사용자 정보 표시 헤더 -->
+    <div class="user-header">
+      <div class="user-info">
+        <span id="user-name">로딩 중...</span>
+        <span class="user-status">로그인됨</span>
+      </div>
+      <div class="header-actions">
+        <button class="header-btn" onclick="window.location.href='/mypage.html'">
+          마이페이지
+        </button>
+        <button class="header-btn" onclick="window.location.href='/logout'">
+          로그아웃
+        </button>
+      </div>
+    </div>
+
     <div class="container">
       <div class="header-summary" id="coin-summary"></div>
 
@@ -53,7 +69,6 @@
 
           <!-- 시간단위를 드롭다운으로 변경 -->
           <div class="time-controls">
-            <!-- <label for="timeframe-select">시간단위:</label> -->
             <select id="timeframe-select" class="timeframe-dropdown">
               <option value="1">1분</option>
               <option value="5">5분</option>
@@ -66,28 +81,28 @@
           </div>
         </div>
         <div class="chart-container">
-  <div id="priceChart" class="chart-section price-chart"></div>
-  
-  <!-- RSI 차트 (초기 숨김) -->
-  <div id="rsiChart" class="chart-section indicator-chart hidden" data-indicator="RSI">
-    <div class="indicator-header">
-      <span class="indicator-title">RSI (14)</span>
-      <button class="indicator-close" data-target="rsiChart">×</button>
-    </div>
-    <div class="chart-content"></div>
-  </div>
-  
-  <!-- MACD 차트 (초기 숨김) -->
-  <div id="macdChart" class="chart-section indicator-chart hidden" data-indicator="MACD">
-    <div class="indicator-header">
-      <span class="indicator-title">MACD (12, 26, 9)</span>
-      <button class="indicator-close" data-target="macdChart">×</button>
-    </div>
-    <div class="chart-content"></div>
-  </div>
-  
-  <div id="volumeChart" class="chart-section volume-chart"></div>
-</div>
+          <div id="priceChart" class="chart-section price-chart"></div>
+          
+          <!-- RSI 차트 (초기 숨김) -->
+          <div id="rsiChart" class="chart-section indicator-chart hidden" data-indicator="RSI">
+            <div class="indicator-header">
+              <span class="indicator-title">RSI (14)</span>
+              <button class="indicator-close" data-target="rsiChart">×</button>
+            </div>
+            <div class="chart-content"></div>
+          </div>
+          
+          <!-- MACD 차트 (초기 숨김) -->
+          <div id="macdChart" class="chart-section indicator-chart hidden" data-indicator="MACD">
+            <div class="indicator-header">
+              <span class="indicator-title">MACD (12, 26, 9)</span>
+              <button class="indicator-close" data-target="macdChart">×</button>
+            </div>
+            <div class="chart-content"></div>
+          </div>
+          
+          <div id="volumeChart" class="chart-section volume-chart"></div>
+        </div>
       </div>
 
       <div class="bottom-content">
@@ -216,7 +231,31 @@
       </div>
     </div>
 
+    <!-- 🔧 새로 추가: 사용자 정보 로딩 스크립트 -->
     <script>
+      // 사용자 정보 로딩
+      async function loadUserInfo() {
+        try {
+          const response = await fetch('/api/user');
+          if (response.ok) {
+            const user = await response.json();
+            document.getElementById('user-name').textContent = 
+              user.preferred_username || user.name || user.email || '사용자';
+            
+            // 삭제 예약 사용자 알림
+            if (user.deletion_cancelled) {
+              alert('계정 삭제가 취소되었습니다. 계속 서비스를 이용하실 수 있습니다.');
+            }
+          }
+        } catch (error) {
+          console.error('사용자 정보 로딩 실패:', error);
+          document.getElementById('user-name').textContent = '사용자';
+        }
+      }
+
+      // 페이지 로드 시 사용자 정보 로딩
+      document.addEventListener('DOMContentLoaded', loadUserInfo);
+
       // 전역 함수로 지표 관리
       let currentIndicators = [];
 
@@ -241,42 +280,6 @@
         console.log("모든 지표가 제거되었습니다.");
       }
     </script>
-
-    <style>
-      /* 지표 버튼 스타일 */
-      .indicator-controls {
-        display: flex;
-        gap: 10px;
-        justify-content: center;
-        flex-wrap: wrap;
-      }
-
-      .indicator-btn {
-        background-color: #2a2a2a;
-        color: #e0e0e0;
-        border: 1px solid #444;
-        padding: 8px 12px;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 0.9rem;
-        transition: all 0.2s;
-      }
-
-      .indicator-btn:hover {
-        background-color: #444;
-        border-color: #666;
-      }
-
-      .indicator-btn:active {
-        transform: scale(0.95);
-      }
-
-      /* TradingView 차트 컨테이너 */
-      #combinedChart {
-        width: 100% !important;
-        height: 100% !important;
-      }
-    </style>
 
     <script type="module" src="js/main.js"></script>
   </body>

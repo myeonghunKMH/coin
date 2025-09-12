@@ -1,227 +1,911 @@
 <!DOCTYPE html>
 <html lang="ko">
-  <head>
-    <meta charset="UTF-8" />
-    <title>시나리오 1: 2021년 불장</title>
-    <link rel="stylesheet" href="../css/common.css" />
-    <style>
-      .scenario-wrapper {
-        max-width: 1000px;
-        margin: 0 auto;
-        padding: 40px 20px;
-      }
+<head>
+  <meta charset="UTF-8" />
+  <title>시나리오1 | BTC 과거 데이터 모의투자</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Charts (scenario3와 동일 버전/순서) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.0/dist/chartjs-chart-financial.min.js"></script>
 
-      .scenario-header {
-        text-align: center;
-        margin-bottom: 40px;
-      }
+  <style>
+    :root{
+      --bg:#212121; --panel:#1f1f1f; --panel-2:#1f1f1f;
+      --line:#424242; --hairline:#5e5e5e; --text:#E8ECF3; --muted:#bfc6d6;
+      --active:#ffffff; --active-600:#a3a3a3;
+      --headline:#ffd166;
+      --candle-up:  rgb(255, 103, 103);
+      --candle-down:rgb(74, 196, 175);
+      --vol-up:     rgba(255, 103, 103,.34);
+      --vol-down:   rgba(74, 196, 175,.30);
+      --font-sm:12.5px; --font-md:14.5px; --font-lg:18px;
+      --price-h:62vh; --vol-h:16vh;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:#1f1f1f;color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
 
-      .scenario-title {
-        font-size: 2.5rem;
-        color: #e0e0e0;
-        margin-bottom: 10px;
-      }
+    /* Header */
+    .header{display:flex;align-items:center;justify-content:center;padding:16px;border-bottom:1px solid var(--line);position:relative;background:var(--panel)}
+    .left-tools{position:absolute;left:12px;top:50%;transform:translateY(-50%);display:flex;gap:10px;align-items:center}
+    .back-btn{padding:9px 12px;border-radius:12px;background:rgba(63, 63, 63, 0.705);border:1px solid var(--hairline);color:#dfe5f1;text-decoration:none;font-weight:700;cursor:pointer; height: 35px;display:flex;align-items: center;}
+    .header-date{font-family:ui-monospace,Menlo,Consolas,monospace;color:#ffffff;font-size:15px;opacity:.95}
+    .scenario-wrap{display:flex;flex-direction:column;align-items:center;gap:6px}
+    .scenario-badge{padding:5px 12px;border-radius:14px;background:rgba(49,49,49,.705);border:1px solid #bbb;color:#bbb;font-size:13px;font-weight:700}
+    .scenario-title{font-weight:800;color:#bbbbbb}
+    .balances{position:absolute;right:12px;top:50%;transform:translateY(-50%);display:flex;gap:10px}
+    .b-item{padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(180deg,rgba(63,63,63,0), rgb(63,63,63))}
+    .b-label{font-size:var(--font-sm);color:#bac0cc}
+    .b-value{font-size:var(--font-lg);font-weight:800;color:#eef3ff}
+    .positive{color:#9CD67A}.negative{color:#FF7A7A}
 
-      .scenario-period {
-        font-size: 1.2rem;
-        color: #a0a0a0;
-        margin-bottom: 20px;
-      }
+    /* Grid (우측 폭 scenario3 동일) */
+    .grid{display:grid; gap:1px;
+      grid-template-columns:2.1fr 0.95fr; grid-auto-rows:min-content;
+      min-height:calc(92vh - 64px); border-top:1px solid var(--line); position:relative;}
+    .grid-bottom{position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--line);}
+    .col{background:var(--panel-2);display:flex;flex-direction:column;min-width:0}
+    #leftCol{border-right:1px solid var(--line)}
 
-      .scenario-description {
-        background-color: #2a2a2a;
-        padding: 20px;
-        border-radius: 8px;
-        margin-bottom: 30px;
-        line-height: 1.6;
-      }
+    /* BTC pane */
+    .pane-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#212121,#212121)}
+    .pane-title{display:flex;align-items:center;gap:10px;color:#ffd166;}
+    .price-block{text-align:right}.big{font-size:var(--font-lg);font-weight:800}.sub{font-size:var(--font-sm);color:#9aa0a6}
 
-      .scenario-stats {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 20px;
-        margin-bottom: 30px;
-      }
+    .chart-wrap{flex:1;padding:12px;display:flex;flex-direction:column;gap:10px}
+    .chart-box{position:relative;border:1px solid rgba(255,255,255,.08);border-radius:14px;overflow:hidden;background:#1b1b1b}
+    .price-box{height:var(--price-h)}
+    .vol-box{height:var(--vol-h)}
+    .chart{width:100%;height:100%;display:block}
 
-      .stat-card {
-        background-color: #1c1c1c;
-        padding: 20px;
-        border-radius: 8px;
-        text-align: center;
-      }
+    /* Right panel */
+    .trade-panel{padding:12px;display:flex;flex-direction:column;gap:12px}
+    .seg{display:grid;gap:10px;background:rgba(43, 43, 43, 0.555);border:1px solid var(--line);border-radius:14px;padding:12px}
+    .seg-title{font-weight:900;border-bottom:1px dashed var(--hairline);padding-bottom:8px}
 
-      .stat-label {
-        font-size: 0.9rem;
-        color: #a0a0a0;
-        margin-bottom: 5px;
-      }
+    .toolbar{display:flex;align-items:center;gap:8px}
+    .controls-left{display:flex;gap:8px;align-items:center}
+    .btn{padding:10px 14px;border-radius:12px;font-weight:800;border:1px solid #414141;background:#202020;color:#b1b1b1;cursor:pointer}
+    .btn.is-active{border-color:var(--active);color:var(--active)} /* 버튼만 흰색 활성화 */
+    .speed-wrap{margin-left:auto;display:flex;align-items:center;gap:6px}
+    #speedSlider{width:220px; accent-color: #cacaca;}
 
-      .stat-value {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #00ff88;
-      }
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .label{font-size:var(--font-sm);color:#ffffff; margin-bottom: 6px;}
+    .input{width:100%;padding:12px;border:1px solid var(--line);background:#202020;color:#e9eef8;border-radius:12px}
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button{background:transparent}
+    input[type="number"]{background:#202020}
 
-      .trading-tips {
-        background-color: #2a2a2a;
-        padding: 20px;
-        border-radius: 8px;
-        margin-bottom: 30px;
-      }
+    .pct-row{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:-13px}
+    .pct{padding:10px;border:1px solid var(--line);background:#202020;color:#cfd5e2;border-radius:12px;cursor:pointer;font-size:12px;font-weight:800}
+    .warn{min-height:18px;display:flex;align-items:center;font-size:12px;color:#f08585;background:rgba(229,62,62,.08);padding:6px;border-radius:12px;border:1px dashed rgba(229,62,62,.15);visibility:hidden;margin:10px 0 4px}
+    .warn.show{visibility:visible}
+    .order-row{grid-template-columns:1fr;margin-top:-4px;}
+    .order-btn{width:100%;padding:12px;border-radius:12px;font-weight:900;border:0;cursor:pointer;background:linear-gradient(180deg,var(--active),var(--active-600));color:#0b0c0f}
 
-      .tips-title {
-        font-size: 1.3rem;
-        color: #e0e0e0;
-        margin-bottom: 15px;
-      }
+    /* Footer status (scenario3 동일) */
+    .footer-strip{margin-top:8px;border-top:1px solid var(--line);padding:8px 10px;color:#a7a7a7;font-size:15px;display:flex;justify-content:space-between}
+    #simStatus{white-space:nowrap}
+    #simCounter{white-space:nowrap}
 
-      .tip-item {
-        display: flex;
-        align-items: flex-start;
-        margin-bottom: 10px;
-        padding: 10px;
-        background-color: #1c1c1c;
-        border-radius: 5px;
-      }
+    /* Modals (timeline/news/summary) */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(2,4,8,.60);display:none;align-items:center;justify-content:center;z-index:9999}
+    .modal{width:min(920px,96vw);background:#1a1a1a;border:1px solid var(--line);border-radius:16px;box-shadow:0 32px 90px rgba(0,0,0,.6);overflow:hidden}
+    .modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line);font-weight:900}
+    .modal-body{padding:16px;display:grid;gap:14px}
+    .hr{height:1px;background:var(--line);margin:6px 0}
+    .modal-actions{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--line)}
+    .mbtn{padding:10px 12px;border-radius:12px;border:1px solid #2a2f38;background:linear-gradient(180deg,var(--active),var(--active-600));color:#0b0c0f;font-weight:900;cursor:pointer}
 
-      .tip-icon {
-        font-size: 1.2rem;
-        margin-right: 10px;
-        margin-top: 2px;
-      }
+    .news-list{display:grid;gap:8px}
+    .news-item{border:1px solid var(--line);border-radius:10px;padding:10px;background:#151515}
+    .news-time{font-size:12px;color:#9aa2b4}
+    .news-title{font-weight:800;font-size:13px;color:#e7edf8}
+    #newsHeadline{font-weight:900;font-size:18px;color:var(--headline);letter-spacing:.2px}
 
-      .action-buttons {
-        display: flex;
-        justify-content: center;
-        gap: 20px;
-      }
+    /* Tutorial notice modal */
+    .notice-backdrop{position:fixed;inset:0;background:rgba(0, 0, 0, 0.705);display:none;align-items:center;justify-content:center;z-index:10000}
+    .notice{width:min(680px,94vw);background:#1a1a1a;border:1px solid #464646;border-radius:14px;box-shadow:0 24px 64px rgba(0,0,0,.65);overflow:hidden}
+    .notice-header{padding:16px 18px;border-bottom:1px solid var(--line);font-size:20px;font-weight:800}
+    .notice-body{padding:16px 18px;color:#e8e8e8;line-height:1.6}
+    .notice-body p{margin:0 0 8px 0;color:#cfcfcf}
+    .notice-body ol{margin:8px 0 12px 20px}
+    .notice-body li{margin:6px 0}
+    .notice-actions{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--line)}
 
-      .action-btn {
-        padding: 15px 30px;
-        font-size: 1.1rem;
-        font-weight: bold;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        transition: all 0.3s;
-      }
+    /* ---------- ⬇ 추가된 최소 수정: 결과값 오른쪽 정렬 공통 ---------- */
+    .kv{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:4px 0}
+    .kv strong, .kv span:last-child{min-width:120px;text-align:right}
 
-      .start-btn {
-        background-color: #00ff88;
-        color: #1a1a1a;
-      }
+    /* ---------- ⬇ 추가된 최소 수정: 뉴스 모달 전용 레이아웃 ---------- */
+    #newsModal .order-type-row{display:grid;grid-template-columns:1fr}
+    #newsModal .news-grid-2x2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    #newsModal .pct-row{grid-template-columns:repeat(4,1fr);gap:4px;margin-top:0;margin-bottom:8px}
 
-      .start-btn:hover {
-        background-color: #00cc6a;
-        transform: translateY(-2px);
-      }
+    @media (max-width:1200px){
+      .grid{grid-template-columns:1fr;min-height:auto}
+      /* 반응형: 2x2 → 1열 */
+      #newsModal .news-grid-2x2{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <div class="left-tools">
+      <a href="javascript:history.back()" class="back-btn">← 튜토리얼로</a>
+      <button id="newsToggle" class="back-btn" title="뉴스 타임라인">📰</button>
+      <button id="helpBtn" class="back-btn" title="튜토리얼 안내 보기" aria-label="튜토리얼 안내 보기">📖</button>
+      <div class="header-date" id="timebox">대기중…</div>
+    </div>
+    <div class="scenario-wrap">
+      <span class="scenario-badge">SCENARIO 01</span>
+      <span class="scenario-title">BTC 과거 데이터 모의투자</span>
+    </div>
+    <div class="balances">
+      <div class="b-item"><div class="b-label">보유 KRW</div><div class="b-value" id="krwBalance">10,000,000</div></div>
+      <div class="b-item"><div class="b-label">총 자산</div><div class="b-value" id="totalAssets">10,000,000</div></div>
+      <div class="b-item"><div class="b-label">수익률</div><div class="b-value" id="profitRate">0.00%</div></div>
+    </div>
+  </div>
 
-      .back-btn {
-        background-color: #444;
-        color: white;
-      }
-
-      .back-btn:hover {
-        background-color: #555;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="scenario-wrapper">
-      <div class="scenario-header">
-        <h1 class="scenario-title">🚀 2021년 암호화폐 대불장</h1>
-        <div class="scenario-period">2021년 1월 - 2021년 11월</div>
-      </div>
-
-      <div class="scenario-description">
-        <h3>시나리오 배경</h3>
-        <p>
-          2021년은 암호화폐 역사상 가장 큰 불장 중 하나였습니다. 코로나19로 인한
-          유동성 공급, 기관 투자자들의 비트코인 채택, NFT 붐, DeFi 열풍 등이
-          복합적으로 작용하며 전체 암호화폐 시장이 폭발적으로 성장했습니다.
-        </p>
-
-        <p>
-          이 시나리오에서는 초기에 진입하여 상승장에서의 매매 타이밍을 연습하고,
-          고점에서의 수익 실현 능력을 기를 수 있습니다.
-        </p>
-      </div>
-
-      <div class="scenario-stats">
-        <div class="stat-card">
-          <div class="stat-label">비트코인 최대 상승률</div>
-          <div class="stat-value">+540%</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">이더리움 최대 상승률</div>
-          <div class="stat-value">+1,200%</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">시장 총액 증가율</div>
-          <div class="stat-value">+2,800%</div>
-        </div>
-      </div>
-
-      <div class="trading-tips">
-        <h3 class="tips-title">💡 이 시나리오에서 배울 수 있는 것들</h3>
-
-        <div class="tip-item">
-          <span class="tip-icon">📈</span>
+  <!-- Main grid -->
+  <div class="grid" id="gridRoot">
+    <!-- Left: BTC charts -->
+    <section class="col" id="leftCol">
+      <div class="pane-header">
+        <div class="pane-title">
           <div>
-            <strong>상승 추세 진입 타이밍</strong><br />
-            초기 상승 신호를 포착하고 적절한 시점에 포지션을 구축하는 방법을
-            학습합니다.
+            <div style="font-weight:800;">BTC / KRW</div>
+            <div class="sub" id="btcRange">일봉</div>
+          </div>
+        </div>
+        <div class="price-block">
+          <div class="big" id="btcPrice">-</div>
+          <div class="sub" id="btcChange">-</div>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-box price-box"><canvas id="btcPriceChart" class="chart"></canvas></div>
+        <div class="chart-box vol-box"><canvas id="btcVolChart" class="chart"></canvas></div>
+      </div>
+    </section>
+
+    <!-- Right: Controls & Trading & Holdings -->
+    <aside class="col">
+      <div class="trade-panel">
+        <!-- sim controls -->
+        <div class="seg">
+          <div class="toolbar">
+            <div class="controls-left" id="controlsLeft">
+              <button class="btn" id="playBtn">▶ 시작</button>
+              <button class="btn" id="pauseBtn">⏸ 일시정지</button>
+              <button class="btn" id="resetBtn">🔄 리셋</button>
+            </div>
+            <div class="speed-wrap">
+              <label class="label" for="speedSlider">속도</label>
+              <input id="speedSlider" type="range" min="1" max="10" step="1" value="1" />
+              <span id="speedVal" class="label">1x</span>
+            </div>
           </div>
         </div>
 
-        <div class="tip-item">
-          <span class="tip-icon">💰</span>
-          <div>
-            <strong>수익 실현 전략</strong><br />
-            불장에서 욕심을 조절하고 단계적으로 수익을 실현하는 전략을 익힙니다.
+        <!-- order -->
+        <div class="seg">
+          <div class="seg-title">주문</div>
+          <div class="row">
+            <div>
+              <div class="label">주문 구분</div>
+              <select class="input" id="side">
+                <option value="buy">매수</option>
+                <option value="sell">매도</option>
+              </select>
+            </div>
+            <div>
+              <div class="label">체결 단가 (시장가)</div>
+              <input class="input" id="price" placeholder="시장가" disabled />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <div class="label">수량 (BTC)</div>
+              <input class="input" id="amount" type="number" step="0.00000001" placeholder="0" />
+            </div>
+            <div>
+              <div class="label">주문 총액 (KRW)</div>
+              <input class="input" id="total" type="text" placeholder="0" readonly />
+            </div>
+          </div>
+          <div class="pct-row">
+            <button class="pct" data-pct="25">25%</button>
+            <button class="pct" data-pct="50">50%</button>
+            <button class="pct" data-pct="75">75%</button>
+            <button class="pct" data-pct="100">MAX</button>
+            <input class="input" id="pctInput" type="number" placeholder="직접%" min="0" max="100" />
+          </div>
+          <div class="warn" id="warn"></div>
+          <div class="row order-row">
+            <button class="order-btn" id="orderBtn">매수</button>
           </div>
         </div>
 
-        <div class="tip-item">
-          <span class="tip-icon">⚖️</span>
-          <div>
-            <strong>포지션 관리</strong><br />
-            상승장에서도 리스크 관리를 하며 적절한 비중으로 투자하는 방법을
-            연습합니다.
+        <!-- holdings -->
+        <div class="seg">
+          <div class="seg-title">보유 현황</div>
+          <div class="card">
+            <div style="font-weight:900;margin-bottom:6px">BTC</div>
+            <div class="kv"><span>수량</span><span id="holdBTCQty">-</span></div>
+            <div class="kv"><span>평균단가</span><span id="holdBTCAvg">-</span></div>
+            <div class="kv"><span>평가손익</span><span id="holdBTCPnL">-</span></div>
           </div>
+          <div class="kv" style="margin-top:8px;"><span>KRW</span><span id="holdKrw">-</span></div>
         </div>
 
-        <div class="tip-item">
-          <span class="tip-icon">🎯</span>
-          <div>
-            <strong>고점 대응</strong><br />
-            버블 형성과 붕괴 과정을 경험하며, 고점에서의 판단력을 기를 수
-            있습니다.
-          </div>
+        <!-- footer-strip -->
+        <div class="footer-strip">
+          <span id="simStatus">시뮬레이션 대기중</span>
+          <span id="simCounter">- / - 일</span>
         </div>
       </div>
+    </aside>
 
-      <div class="action-buttons">
-        <button class="action-btn start-btn" onclick="startScenario()">
-          시나리오 시작하기
-        </button>
-        <button
-          class="action-btn back-btn"
-          onclick="window.location.href='../historical.html'"
-        >
-          목록으로 돌아가기
-        </button>
+    <div class="grid-bottom"></div>
+  </div>
+
+  <!-- 뉴스 타임라인 모달 -->
+  <div id="timelineModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="timelineTitle">
+    <div class="modal">
+      <div class="modal-header">
+        <div id="timelineTitle">뉴스 타임라인</div>
+        <button class="mbtn" id="timelineClose" aria-label="닫기">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="newsTimeline" class="news-list" aria-live="polite"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="mbtn" id="timelineClose2">닫기</button>
       </div>
     </div>
+  </div>
 
-    <script>
-      function startScenario() {
-        // 실제 구현에서는 시나리오 데이터를 로드하고 거래 인터페이스로 이동
-        alert(
-          "시나리오 기능은 현재 개발 중입니다.\n실시간 모의 트레이드에서 연습해보세요!"
-        );
-        window.location.href = "../realtime.html";
+  <!-- 뉴스 상세 모달 (요청 부분만 레이아웃 변경) -->
+  <div id="newsModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="newsTitle">
+    <div class="modal">
+      <div class="modal-header">
+        <div id="newsTitle">시장 뉴스</div>
+        <button class="mbtn" id="newsCloseBtn" aria-label="닫기">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="newsHeadline">-</div>
+        <div id="newsBody" style="color:#cfd5e2;line-height:1.6">-</div>
+        <div class="hr"></div>
+
+        <!-- ✅ 주문구분 한 줄 전체폭 -->
+        <div class="order-type-row">
+          <div>
+            <div class="label">주문 구분</div>
+            <select class="input" id="newsSide">
+              <option value="">--선택--</option>
+              <option value="buy">매수</option>
+              <option value="sell">매도</option>
+              <option value="hold">유지</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- ✅ 나머지 4개 2×2 배치: 시장가/수량/총액/직접% -->
+        <div class="news-grid-2x2">
+          <div>
+            <div class="label">시장가</div>
+            <input class="input" id="newsPrice" placeholder="시장가" disabled />
+          </div>
+          <div>
+            <div class="label">수량 (BTC)</div>
+            <input class="input" id="newsAmount" type="number" step="0.00000001" placeholder="0" />
+          </div>
+          <div>
+            <div class="label">총액 (KRW)</div>
+            <input class="input" id="newsTotal" type="text" placeholder="0" readonly />
+          </div>
+          <div>
+            <div class="label">직접 %</div>
+            <input class="input" id="newsPctInput" type="number" placeholder="직접%" min="0" max="100" />
+          </div>
+        </div>
+
+        <!-- ✅ %버튼: 가로 꽉 + 하단 여백 -->
+        <div class="pct-row">
+          <button class="pct" data-news-pct="25">25%</button>
+          <button class="pct" data-news-pct="50">50%</button>
+          <button class="pct" data-news-pct="75">75%</button>
+          <button class="pct" data-news-pct="100">MAX</button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="mbtn" id="newsConfirmBtn" disabled>확인</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 튜토리얼 안내 모달 -->
+  <div id="noticeModal" class="notice-backdrop" role="dialog" aria-modal="true" aria-labelledby="noticeTitle">
+    <div class="notice">
+      <div class="notice-header" id="noticeTitle">📖 튜토리얼 진행 전 참고사항</div>
+      <div class="notice-body">
+        <p><strong>이 시나리오는 과거 데이터를 일봉 기준으로 재생합니다.</strong></p>
+        <ol>
+          <li><strong>2021-03-25 ~ 2021-04-26 (30일)</strong> 구간이 먼저 미리보기로 표시됩니다.</li>
+          <li><strong>2021-04-27부터 2021-06-25까지</strong> 하루씩 진행되며, 화면엔 항상 최근 30개만 보입니다.</li>
+          <li>뉴스가 뜨면 시뮬레이션이 일시정지됩니다. 매수/매도/유지를 선택하고 다시 진행하세요.</li>
+        </ol>
+      </div>
+      <div class="notice-actions">
+        <button class="mbtn" id="noticeOkBtn">시작하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 결과 요약 모달 (값 오른쪽 정렬) -->
+  <div id="summaryModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="summaryTitle">
+    <div class="modal">
+      <div class="modal-header">
+        <div id="summaryTitle">시뮬레이션 결과 요약</div>
+      </div>
+      <div class="modal-body">
+        <div class="kv"><span>기간</span><strong id="sumRange">-</strong></div>
+        <div class="kv"><span>최종 총자산</span><strong id="sumTotal">-</strong></div>
+        <div class="kv"><span>총 수익률</span><strong id="sumPr">-</strong></div>
+        <div class="hr"></div>
+        <div style="font-weight:700;">보유 내역</div>
+        <div class="kv"><span>보유 KRW</span><strong id="sumKrw">-</strong></div>
+        <div class="card" style="margin-top:8px;">
+          <div style="font-weight:900;margin-bottom:6px">BTC</div>
+          <div class="kv"><span>수량</span><strong id="sumBTCQty">-</strong></div>
+          <div class="kv"><span>평균단가</span><strong id="sumBTCAvg">-</strong></div>
+          <div class="kv"><span>평가손익</span><strong id="sumBTCPnL">-</strong></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="mbtn" id="summaryOkBtn">닫기</button>
+        <button class="mbtn" id="summaryResetBtn">리셋하고 다시 시작</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===== 명확한 시나리오 범위(2021) =====
+    const RANGE = {
+      previewStart: "2021-03-25",
+      previewEnd:   "2021-04-26", // 미리보기 마지막 날
+      runFrom:      "2021-04-27", // 실제 진행 시작
+      simEnd:       "2021-06-25"
+    };
+
+    // ===== 상수/상태 =====
+    const INITIAL_KRW = 10_000_000;
+    const WINDOW_DAYS = 30;         // ✅ 항상 30개만 창에 표시
+    const VOL_SCALE = 0.35;
+    const EPS = 1e-9;
+
+    const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+    const CANDLE_UP   = cssVar('--candle-up');
+    const CANDLE_DOWN = cssVar('--candle-down');
+    const VOL_UP      = cssVar('--vol-up');
+    const VOL_DOWN    = cssVar('--vol-down');
+
+    const state = {
+      running:false,
+      idx:0,
+      datesAll:[],     // 2021-03-25 ~ 2021-06-25 전체 일자
+      simDates:[],     // 2021-04-27 ~ 2021-06-25 진행 구간
+      data:[],         // OHLCV (동일 범위 필터)
+      charts:{ price:null, vol:null },
+      price:0, prevPrice:0,
+      portfolio:{ krw:INITIAL_KRW, btc:{qty:0, cost:0} },
+      timer:null, speed:1,
+      news:[], newsShown:new Set()
+    };
+
+    // ===== 유틸 =====
+    function toTs(d){ return new Date(d + "T00:00:00+09:00").getTime(); }
+    function normDay(t){ return new Date(new Date(t).toDateString()).getTime(); }
+    function findByDate(arr, dayTs){ return arr.find(d => normDay(d.ts) === dayTs); }
+    function kstDateOnly(ts){
+      const d = new Date(ts);
+      return d.toLocaleDateString('ko-KR',{ timeZone:'Asia/Seoul', year:'numeric', month:'2-digit', day:'2-digit' });
+    }
+    function kstDate(ts){
+      const d = new Date(ts);
+      return d.toLocaleString('ko-KR',{ timeZone:'Asia/Seoul', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+    }
+    function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+
+    // ===== 데이터 =====
+    async function fetchDailyBTC(){
+      // 서버에서 큰 범위를 받아오되, 클라이언트에서 2021-03-25 ~ 2021-06-25 로 필터
+      const res = await fetch(`/api/history?market=btc&limit=10000`);
+      if(!res.ok) throw new Error('데이터 로딩 실패');
+      const rows = await res.json();
+
+      const startTs = toTs(RANGE.previewStart);
+      const endTs   = new Date(RANGE.simEnd + "T23:59:59+09:00").getTime();
+
+      const arr = rows.map(r=>({
+        ts:new Date(r.candle_date_time_kst).getTime(),
+        o:+r.opening_price, h:+r.high_price, l:+r.low_price, c:+r.trade_price,
+        v:+(r.candle_acc_trade_volume ?? r.volume ?? 0),
+        kst:r.candle_date_time_kst
+      }))
+      .filter(x => x.ts >= startTs && x.ts <= endTs)
+      .sort((a,b)=>a.ts-b.ts);
+
+      // 전체/시뮬 일자 구성
+      const daySetAll = new Set(arr.map(d => normDay(d.ts)));
+      state.datesAll = [...daySetAll].sort((a,b)=>a-b);
+
+      const simStartTs = toTs(RANGE.runFrom);
+      const simEndTs   = toTs(RANGE.simEnd);
+      state.simDates = state.datesAll.filter(ts => ts >= simStartTs && ts <= simEndTs);
+
+      return arr;
+    }
+
+    async function fetchNews(){
+      const res = await fetch('/api/scenario1/news');
+      if(!res.ok) throw new Error('뉴스 로딩 실패');
+      const raw = await res.json();
+      state.news = raw.map(n=>({ time:n.time, headline:n.title, body:n.description }))
+                      .sort((a,b)=> new Date(a.time) - new Date(b.time));
+      document.getElementById('newsTimeline').innerHTML = '';
+    }
+
+    // ===== 차트 =====
+    function makePriceChart(ctx){
+      return new Chart(ctx,{
+        type:'candlestick',
+        data:{datasets:[{
+          label:'Price',
+          data:[],
+          yAxisID:'y',
+          color:{up:CANDLE_UP,down:CANDLE_DOWN,unchanged:'#9aa0a6'}
+        }]},
+        options:{
+          animation:false,responsive:true,maintainAspectRatio:false,parsing:false,
+          scales:{
+            x:{type:'time',time:{unit:'day',tooltipFormat:'yyyy-MM-dd'},grid:{color:'rgba(255,255,255,.06)'},ticks:{color:'#9aa0a6'}},
+            y:{position:'left',grid:{color:'rgba(255,255,255,.06)'},ticks:{color:'#9aa0a6'}}
+          },
+          plugins:{legend:{display:false},tooltip:{intersect:false,mode:'index'}}
+        }
+      });
+    }
+    function makeVolChart(ctx){
+      return new Chart(ctx,{
+        type:'bar',
+        data:{datasets:[{
+          label:'Volume',
+          data:[],
+          yAxisID:'y',
+          backgroundColor:[],
+          barPercentage:0.92, categoryPercentage:0.92
+        }]},
+        options:{
+          animation:false,responsive:true,maintainAspectRatio:false,parsing:false,
+          scales:{
+            x:{type:'time',time:{unit:'day',tooltipFormat:'yyyy-MM-dd'},grid:{display:false},ticks:{display:false}},
+            y:{position:'left',beginAtZero:true,grid:{color:'rgba(255,255,255,.06)'},ticks:{color:'#9aa0a6'}}
+          },
+          plugins:{legend:{display:false},tooltip:{intersect:false,mode:'index'}}
+        }
+      });
+    }
+
+    function redrawCharts(){
+      // 창에는 항상 최근 30개만
+      const uptoDays = state.datesAll.slice(0, state.idx+1);
+      const winDays  = uptoDays.slice(-WINDOW_DAYS);
+
+      const priceSeries = winDays.map(day=>{
+        const x = findByDate(state.data, day);
+        return x ? { x:x.ts, o:x.o, h:x.h, l:x.l, c:x.c } : null;
+      }).filter(Boolean);
+
+      const volRows = winDays.map(day=>{
+        const x = findByDate(state.data, day);
+        return x ? { x:x.ts, v:x.v, up:(x.c>=x.o) } : null;
+      }).filter(Boolean);
+
+      const volSeries = volRows.map(d => ({ x:d.x, y:d.v * VOL_SCALE }));
+      const volColors = volRows.map(d => d.up ? VOL_UP : VOL_DOWN);
+
+      state.charts.price.data.datasets[0].data = priceSeries;
+      state.charts.vol.data.datasets[0].data   = volSeries;
+      state.charts.vol.data.datasets[0].backgroundColor = volColors;
+
+      state.charts.price.update('none');
+      state.charts.vol.update('none');
+
+      const firstTs = priceSeries[0]?.x ?? state.data[0]?.ts;
+      const lastTs  = priceSeries[priceSeries.length-1]?.x ?? state.data[state.data.length-1]?.ts;
+      if(firstTs && lastTs){
+        document.getElementById('btcRange').textContent = `일봉(${kstDateOnly(firstTs)} ~ ${kstDateOnly(lastTs)})`;
       }
-    </script>
-  </body>
+    }
+
+    // ===== 헤더/보유/진행 =====
+    function updateHeader(){
+      const i = state.idx, day = state.datesAll[i];
+      const bar = findByDate(state.data, day); if(!bar) return;
+      state.prevPrice = state.price; state.price = bar.c;
+
+      document.getElementById('btcPrice').textContent = `${Math.round(bar.c).toLocaleString()} KRW`;
+      const prevBar = (i>0) ? findByDate(state.data, state.datesAll[i-1]) : bar;
+      const prev = prevBar?.c ?? bar.c;
+      const diff = bar.c - prev; const pct = prev ? (diff/prev*100) : 0;
+      const chgEl = document.getElementById('btcChange');
+      chgEl.textContent = `${diff>=0?'+':''}${Math.round(diff).toLocaleString()} (${pct.toFixed(2)}%)`;
+      chgEl.className = diff>=0 ? 'sub positive' : 'sub negative';
+
+      document.getElementById('timebox').textContent = `시뮬레이션 일자: ${kstDateOnly(day)}`;
+      document.getElementById('price').value = Math.round(state.price||0).toLocaleString();
+      calcTotal();
+    }
+    function updatePortfolioBox(){
+      const krw = Math.floor(state.portfolio.krw + EPS);
+      const pvBTC = state.portfolio.btc.qty * (state.price||0);
+      const total = Math.floor(krw + pvBTC + EPS);
+      const pr = ((total - INITIAL_KRW)/INITIAL_KRW)*100;
+
+      document.getElementById('krwBalance').textContent = krw.toLocaleString();
+      document.getElementById('totalAssets').textContent = total.toLocaleString();
+      const prEl=document.getElementById('profitRate'); prEl.textContent=`${pr.toFixed(2)}%`; prEl.className=`b-value ${pr>=0?'positive':'negative'}`;
+      document.getElementById('holdKrw').textContent = `${krw.toLocaleString()} 원`;
+
+      const btcAvg = state.portfolio.btc.qty>EPS ? (state.portfolio.btc.cost/state.portfolio.btc.qty) : 0;
+      const btcPnL = state.portfolio.btc.qty*(state.price||0) - state.portfolio.btc.cost;
+      document.getElementById('holdBTCQty').textContent = state.portfolio.btc.qty.toFixed(8);
+      document.getElementById('holdBTCAvg').textContent = Math.floor(btcAvg).toLocaleString();
+      const btcPnLEl=document.getElementById('holdBTCPnL'); btcPnLEl.textContent=`${btcPnL>=0?'+':''}${Math.floor(btcPnL).toLocaleString()} 원`; btcPnLEl.className = btcPnL>=0?'positive':'negative';
+    }
+    function setSimStatus(t){ document.getElementById('simStatus').textContent = t; }
+    function updateCounter(){
+      const today = state.datesAll[state.idx];
+      const iSim = state.simDates.findIndex(ts=>ts===today);
+      const cur = (iSim>=0) ? (iSim+1) : 0;
+      document.getElementById('simCounter').textContent = `${cur} / ${state.simDates.length} 일`;
+    }
+    function updateTick(){ updateHeader(); updatePortfolioBox(); redrawCharts(); updateCounter(); }
+
+    // ===== 주문 =====
+    function floorToDecimals(value, d){ const m = 10**d; return Math.floor(value * m + EPS)/m; }
+    function calcTotal(){
+      const amount = parseFloat(document.getElementById('amount').value || '0');
+      const px = state.price || 0;
+      const total = amount * px;
+      document.getElementById('total').value = (amount>0 && px>0) ? String(total) : '0';
+      document.getElementById('orderBtn').textContent = (document.getElementById('side').value==='buy'?'매수':'매도');
+    }
+    function applyPercent(pct, target='main'){
+      const pct01 = Math.max(0, Math.min(100, pct)) / 100;
+      if(target==='main'){
+        const side=document.getElementById('side').value;
+        const px=state.price||0;
+        if(side==='buy'){
+          const budget = (pct===100) ? Math.max(0, state.portfolio.krw - 1) : state.portfolio.krw * pct01;
+          const amt = (px>0) ? budget/px : 0;
+          document.getElementById('amount').value = floorToDecimals(amt, 8);
+        }else{
+          const lot = state.portfolio.btc.qty * pct01;
+          document.getElementById('amount').value = floorToDecimals(lot, 8);
+        }
+        calcTotal();
+      }else{
+        const side = document.getElementById('newsSide').value;
+        const px=state.price||0; if(!side) return;
+        if(side==='buy'){
+          const budget = (pct===100) ? Math.max(0, state.portfolio.krw - 1) : state.portfolio.krw * pct01;
+          const amt = (px>0) ? budget/px : 0;
+          document.getElementById('newsAmount').value = floorToDecimals(amt, 8);
+        }else if(side==='sell'){
+          const qty = state.portfolio.btc.qty * pct01;
+          document.getElementById('newsAmount').value = floorToDecimals(qty, 8);
+        }
+        calcNewsTotal();
+      }
+    }
+    function warn(msg){
+      const w=document.getElementById('warn');
+      if(msg && msg.trim()){ w.textContent=msg; w.classList.add('show'); }
+      else{ w.textContent=''; w.classList.remove('show'); }
+    }
+    function placeOrder(sideOverride=null, amountOverride=null){
+      warn('');
+      const side = sideOverride || document.getElementById('side').value;
+      const px = state.price || 0;
+      let amount = (amountOverride!==null && amountOverride!==undefined)
+          ? parseFloat(amountOverride)
+          : parseFloat(document.getElementById('amount').value||'0');
+      if(amount<=0 || px<=0){ warn('수량/가격이 올바르지 않습니다.'); return false; }
+      const total=amount*px;
+      if(side==='buy'){
+        if(total > state.portfolio.krw + EPS){ warn('보유 KRW가 부족합니다.'); return false; }
+        state.portfolio.krw = Math.max(0, state.portfolio.krw - total);
+        const a=state.portfolio.btc; a.cost += total; a.qty += amount;
+      }else{
+        const a=state.portfolio.btc;
+        if(amount > a.qty + EPS){ warn(`BTC 보유 수량이 부족합니다.`); return false; }
+        const avg = a.qty>EPS ? (a.cost/a.qty) : 0;
+        const costOut = avg * amount;
+        a.qty = Math.max(0, a.qty - amount);
+        a.cost = Math.max(0, a.cost - costOut);
+        state.portfolio.krw += total;
+      }
+      document.getElementById('amount').value=''; document.getElementById('pctInput').value='';
+      calcTotal(); updatePortfolioBox();
+      return true;
+    }
+
+    // ===== 뉴스 타임라인/모달 =====
+    function addTimelineNews(n){
+      const wrap = document.getElementById('newsTimeline'); if(!wrap) return;
+      const onlyDate = kstDateOnly(new Date(n.time).getTime());
+      const item = document.createElement('div');
+      item.className='news-item';
+      item.innerHTML = `
+        <div class="news-time">${onlyDate} · BTC</div>
+        <div class="news-title">${n.headline || '시장 소식'}</div>
+      `;
+      wrap.prepend(item);
+    }
+    function calcNewsTotal(){
+      const amount = parseFloat(document.getElementById('newsAmount').value || '0');
+      const px = state.price || 0;
+      const total = amount * px;
+      document.getElementById('newsTotal').value = (amount>0 && px>0) ? String(total) : '0';
+    }
+    function openNewsModal(n){
+      pause(); // 뉴스 뜨면 정지
+
+      const key = `${kstDateOnly(new Date(n.time))}:${n.headline||n.title}`;
+      if(!state.newsShown.has(key)){ state.newsShown.add(key); addTimelineNews(n); }
+
+      document.getElementById('newsHeadline').textContent = n.headline || n.title || '시장 소식';
+      document.getElementById('newsBody').innerHTML = (n.body || n.text || '').replace(/\n/g,'<br/>');
+
+      document.getElementById('newsSide').value = '';
+      document.getElementById('newsConfirmBtn').disabled = true;
+      document.getElementById('newsAmount').value='';
+      document.getElementById('newsTotal').value='0';
+      document.getElementById('newsPctInput').value='';
+      document.getElementById('newsPrice').value = state.price ? Math.round(state.price).toLocaleString() : '-';
+
+      document.getElementById('newsConfirmBtn').onclick = ()=>{
+        const side = document.getElementById('newsSide').value;
+        if(!side) return;
+        const px = state.price || 0;
+
+        let amount = parseFloat(document.getElementById('newsAmount').value||'0');
+        const pctVal = parseFloat(document.getElementById('newsPctInput').value||'');
+
+        if(side==='sell'){
+          if((isNaN(amount) || amount<=0) && !isNaN(pctVal)){
+            amount = floorToDecimals(state.portfolio.btc.qty * Math.max(0,Math.min(100,pctVal))/100, 8);
+          }
+          if(amount<=0) amount = floorToDecimals(state.portfolio.btc.qty, 8);
+        }else if(side==='buy'){
+          if((isNaN(amount) || amount<=0) && !isNaN(pctVal)){
+            const budget = (pctVal>=100) ? Math.max(0, state.portfolio.krw - 1) : state.portfolio.krw * (Math.max(0,Math.min(100,pctVal))/100);
+            amount = (px>0) ? floorToDecimals(budget/px, 8) : 0;
+          }
+        }else{ // hold
+          closeNewsModal(); return;
+        }
+
+        if(amount<=0){ alert('수량 또는 %를 입력하세요.'); return; }
+
+        const ok = placeOrder(side, amount);
+        if(ok){
+          updateTick();
+          closeNewsModal();
+        }
+      };
+
+      document.getElementById('newsCloseBtn').onclick = closeNewsModal;
+      document.getElementById('newsModal').style.display = 'flex';
+    }
+    function closeNewsModal(){ document.getElementById('newsModal').style.display = 'none'; }
+
+    function maybeShowNews(){
+      if(!state.news.length) return;
+      const prevDay = state.datesAll[state.idx-1] ?? state.datesAll[state.idx];
+      const currDay = state.datesAll[state.idx]   ?? prevDay;
+      const matched = state.news.find(n=>{
+        const t = normDay(new Date(n.time.replace(' ','T') + '+09:00').getTime());
+        return t > prevDay && t <= currDay;
+      });
+      if(matched) openNewsModal(matched);
+    }
+
+    // ===== 타임라인 모달 =====
+    function openTimeline(){ document.getElementById('timelineModal').style.display = 'flex'; }
+    function closeTimeline(){ document.getElementById('timelineModal').style.display = 'none'; }
+
+    // ===== 튜토리얼/요약 모달 =====
+    function openNotice(){ document.getElementById('noticeModal').style.display = 'flex'; }
+    function closeNotice(){ document.getElementById('noticeModal').style.display = 'none'; }
+
+    function openSummary(){
+      const first = state.simDates[0] || state.datesAll[0];
+      const last  = state.datesAll[state.idx];
+      const krw = Math.floor(state.portfolio.krw);
+      const pvBTC = state.portfolio.btc.qty * (state.price||0);
+      const total = Math.floor(krw + pvBTC);
+      const pr = ((total - INITIAL_KRW)/INITIAL_KRW)*100;
+
+      const btcAvg = state.portfolio.btc.qty>0 ? (state.portfolio.btc.cost/state.portfolio.btc.qty):0;
+      const btcPnL = state.portfolio.btc.qty*(state.price||0) - state.portfolio.btc.cost;
+
+      document.getElementById('sumRange').textContent = `${kstDateOnly(first)} ~ ${kstDateOnly(last)}`;
+      document.getElementById('sumTotal').textContent = total.toLocaleString();
+      document.getElementById('sumPr').textContent = `${pr.toFixed(2)}%`;
+      document.getElementById('sumKrw').textContent = `${krw.toLocaleString()} 원`;
+      document.getElementById('sumBTCQty').textContent = state.portfolio.btc.qty.toFixed(8);
+      document.getElementById('sumBTCAvg').textContent = Math.floor(btcAvg).toLocaleString();
+      const pnlEl = document.getElementById('sumBTCPnL');
+      pnlEl.textContent = `${btcPnL>=0?'+':''}${Math.floor(btcPnL).toLocaleString()} 원`;
+      pnlEl.className = btcPnL>=0 ? 'positive' : 'negative';
+
+      document.getElementById('summaryModal').style.display = 'flex';
+    }
+    function closeSummary(){ document.getElementById('summaryModal').style.display = 'none'; }
+
+    // ===== 재생/정지/타이머 =====
+    function syncPlayButtons(){
+      const playB = document.getElementById('playBtn');
+      const pauseB= document.getElementById('pauseBtn');
+      if(state.running){
+        playB.classList.add('is-active'); pauseB.classList.remove('is-active');
+      }else{
+        pauseB.classList.add('is-active'); playB.classList.remove('is-active');
+      }
+    }
+    function baseDelay(){ return Math.max(80, 1500 / state.speed); }
+    function startTimer(){
+      if(state.timer) clearInterval(state.timer);
+      state.timer = setInterval(tickStep, baseDelay());
+    }
+    function play(){
+      // 처음 시작 시 미리보기 마지막 날(4/26) 위치로 세팅하고 다음 틱에 4/27로 이동
+      const previewEndIdx = state.datesAll.findIndex(ts => ts === toTs(RANGE.previewEnd));
+      if(previewEndIdx >= 0 && state.idx < previewEndIdx) state.idx = previewEndIdx;
+
+      if(state.idx < state.datesAll.length-1){
+        state.running=true;
+        setSimStatus('시뮬레이션 진행중');
+        startTimer();
+        syncPlayButtons();
+      }
+    }
+    function pause(){
+      state.running=false;
+      setSimStatus('시뮬레이션 일시정지');
+      if(state.timer){clearInterval(state.timer); state.timer=null;}
+      syncPlayButtons();
+    }
+    function resetSim(){
+      pause();
+      // 인덱스를 미리보기 마지막날(4/26)로 세팅
+      const previewEndIdx = state.datesAll.findIndex(ts => ts === toTs(RANGE.previewEnd));
+      state.idx = (previewEndIdx>=0) ? previewEndIdx : 0;
+
+      state.portfolio = { krw:INITIAL_KRW, btc:{qty:0, cost:0} };
+      state.newsShown.clear();
+      document.getElementById('newsTimeline').innerHTML = '';
+      setSimStatus('시뮬레이션 대기중');
+      updateTick();
+    }
+    function tickStep(){
+      const lastDay = state.datesAll[state.datesAll.length-1];
+      if(state.datesAll[state.idx] >= lastDay){
+        pause();
+        openSummary();
+        return;
+      }
+      state.idx++;
+      updateTick();
+      // 뉴스: 날짜 변동 시점에 확인
+      maybeShowNews();
+    }
+
+    // ===== 이벤트 =====
+    function wireEvents(){
+      document.getElementById('newsToggle').addEventListener('click', openTimeline);
+      document.getElementById('timelineClose').addEventListener('click', closeTimeline);
+      document.getElementById('timelineClose2').addEventListener('click', closeTimeline);
+
+      document.getElementById('helpBtn').addEventListener('click', openNotice);
+      document.getElementById('noticeOkBtn').addEventListener('click', closeNotice);
+
+      document.getElementById('summaryOkBtn').addEventListener('click', closeSummary);
+      document.getElementById('summaryResetBtn').addEventListener('click', ()=>{ closeSummary(); resetSim(); });
+
+      // 주문 구분 변경
+      document.getElementById('side').addEventListener('change',()=>{
+        const buy = document.getElementById('side').value==='buy';
+        document.getElementById('orderBtn').textContent = buy ? '매수' : '매도';
+        document.getElementById('amount').value='';
+        document.getElementById('total').value='0';
+        document.getElementById('pctInput').value='';
+        calcTotal();
+      });
+
+      document.getElementById('amount').addEventListener('input', calcTotal);
+      document.getElementById('pctInput').addEventListener('input',e=>{
+        const v = Math.max(0, Math.min(100, parseFloat(e.target.value||'0'))); applyPercent(v,'main');
+      });
+      document.querySelectorAll('.pct').forEach(b=>{
+        if(b.hasAttribute('data-pct')) b.addEventListener('click',()=>applyPercent(parseInt(b.dataset.pct,10),'main'));
+      });
+      document.getElementById('orderBtn').addEventListener('click',()=>{
+        const ok = placeOrder();
+        if(!ok) return;
+        updateTick();
+      });
+
+      document.getElementById('playBtn').addEventListener('click', play);
+      document.getElementById('pauseBtn').addEventListener('click', pause);
+      document.getElementById('resetBtn').addEventListener('click', resetSim);
+
+      const speedEl=document.getElementById('speedSlider'), speedVal=document.getElementById('speedVal');
+      speedEl.addEventListener('input', e=>{
+        state.speed = Math.max(1, parseInt(e.target.value,10)||1);
+        speedVal.textContent = `${state.speed}x`;
+        if(state.running){ startTimer(); }
+      });
+
+      // 뉴스 모달 입력들
+      document.getElementById('newsSide').addEventListener('change', (e)=>{
+        const has = !!e.target.value;
+        document.getElementById('newsConfirmBtn').disabled = !has;
+        document.getElementById('newsAmount').value='';
+        document.getElementById('newsTotal').value='0';
+        document.getElementById('newsPctInput').value='';
+        calcNewsTotal();
+      });
+      document.getElementById('newsAmount').addEventListener('input', calcNewsTotal);
+      document.getElementById('newsPctInput').addEventListener('input', (e)=>{
+        const v = Math.max(0, Math.min(100, parseFloat(e.target.value||'0'))); applyPercent(v,'news');
+      });
+      document.querySelectorAll('[data-news-pct]').forEach(btn=>{
+        btn.addEventListener('click', ()=>applyPercent(parseInt(btn.dataset.newsPct,10),'news'));
+      });
+    }
+
+    // ===== 초기화 =====
+    async function init(){
+      try{
+        state.charts.price = makePriceChart(document.getElementById('btcPriceChart').getContext('2d'));
+        state.charts.vol   = makeVolChart  (document.getElementById('btcVolChart').getContext('2d'));
+
+        state.data = await fetchDailyBTC();
+        await fetchNews();
+
+        // 초기 인덱스: 미리보기 마지막 날(2021-04-26)
+        const idxPreviewEnd = state.datesAll.findIndex(ts=> ts === toTs(RANGE.previewEnd));
+        state.idx = (idxPreviewEnd>=0) ? idxPreviewEnd : 0;
+
+        setSimStatus('시뮬레이션 대기중');
+        updateTick(); wireEvents();
+
+        // 초기 튜토리얼
+        openNotice();
+      }catch(e){
+        console.error(e); alert(e.message || '로딩 오류');
+      }
+    }
+    init();
+  </script>
+</body>
 </html>

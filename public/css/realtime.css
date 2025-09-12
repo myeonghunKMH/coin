@@ -1140,3 +1140,81 @@ canvas {
   min-height: 80px;
   border-top: 1px solid #333;
 }
+
+/* 사용자 헤더 */
+.user-header {
+  background-color: #0f0f0f;
+  padding: 10px 20px;
+  border-bottom: 1px solid #333;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-info #user-name {
+  color: #e0e0e0;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.user-status {
+  background-color: #00C851;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.header-btn {
+  background-color: #2a2a2a;
+  color: #e0e0e0;
+  border: 1px solid #444;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.header-btn:hover {
+  background-color: #444;
+  border-color: #666;
+}
+
+/* 기존 컨테이너 여백 조정 */
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 15px 20px; /* 상단 여백 줄임 */
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+  .user-header {
+    padding: 8px 15px;
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .user-info, .header-actions {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .header-btn {
+    flex: 1;
+    max-width: 100px;
+  }
+}

@@ -16,7 +16,21 @@ export class TradingState {
     this.pendingOrders = [];
     this.mainChart = null;
 
+    this.currentUser = null;
+    this.isAuthenticated = false;
+
     this.initializeData();
+  }
+
+  setUser(user) {
+    this.currentUser = user;
+    this.isAuthenticated = !!user;
+    console.log('사용자 설정됨:', user?.preferred_username || user?.email);
+  }
+
+  // 🔧 새로 추가: 현재 사용자 정보 반환
+  getCurrentUser() {
+    return this.currentUser;
   }
 
   initializeData() {

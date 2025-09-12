@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ITC | 마이페이지</title>
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    :root{
+      color-scheme: dark;
+      --stroke:#2b2b2b;
+      --glow:255,255,255;
+      --card-bg-1: rgba(255,255,255,.06); /* ↑ 밝게 (기존 .03) */
+      --card-bg-2: rgba(255,255,255,.02); /* ↑ 밝게 (기존 .01) */
+    }
+    body{
+      margin:0; color:#eaeaea;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      background:
+        radial-gradient(1200px 600px at 50% -10%, rgba(255,255,255,.12), transparent 60%),
+        radial-gradient(900px 600px at 50% 120%, rgba(255,255,255,.08), transparent 60%),
+        repeating-linear-gradient(to bottom, rgba(255,255,255,.03) 0 2px, rgba(0,0,0,0) 2px 8px),
+        linear-gradient(#151515, #0a0a0a);
+      background-attachment: fixed;
+    }
+    *{ box-sizing:border-box; }
+
+    /* Header */
+    header{
+      position:fixed; inset:12px 12px auto 12px; z-index:10;
+      display:flex; align-items:center; justify-content:space-between;
+      backdrop-filter:saturate(120%) blur(2px);
+    }
+    .brand img{
+      width:120px; height:auto;
+      filter: drop-shadow(0 10px 26px rgba(var(--glow),.22))
+              drop-shadow(0 0 20px rgba(var(--glow),.18));
+    }
+    .navbtn{
+      display:inline-flex; align-items:center; gap:8px;
+      height:36px; padding:0 12px; border-radius:10px;
+      background:rgba(255,255,255,.03);
+      border:1px solid var(--stroke); color:#f3f3f3; text-decoration:none; font-weight:700;
+      transition:.22s; box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    .navbtn:hover{
+      border-color:rgba(var(--glow),.32);
+      box-shadow:0 0 12px rgba(var(--glow),.22);
+      transform:translateY(-1px); color:#fff;
+    }
+
+    /* Layout */
+    main{
+      width:min(1100px,92vw);
+      margin:130px auto 48px;
+      display:flex; flex-direction:column; gap:22px;
+    }
+    .pagetitle h1{
+      margin:0; font-size:clamp(22px,3.2vw,30px); font-weight:900; letter-spacing:.2px;
+      background:linear-gradient(95deg,#fff 0%,#eee 18%,#fff 45%,#d2d2d2 65%,#fff 100%);
+      -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+      filter: drop-shadow(0 12px 36px rgba(var(--glow),.18)) drop-shadow(0 0 24px rgba(var(--glow),.14));
+    }
+
+    /* Card — 밝기 업그레이드 */
+    .card{
+      position:relative;
+      background:linear-gradient(180deg, var(--card-bg-1), var(--card-bg-2) 40%, rgba(255,255,255,.00));
+      border:1px solid rgba(255,255,255,.12);      /* 경계선도 살짝 밝게 */
+      border-radius:16px;
+      box-shadow:
+        0 8px 22px rgba(0,0,0,.35),
+        inset 0 1px 0 rgba(255,255,255,.08),       /* 내부 하이라이트 ↑ */
+        inset 0 0 30px rgba(255,255,255,.03);      /* 은은한 내부 광택 추가 */
+      overflow:hidden;
+      transition:.28s;
+      padding:22px;
+    }
+    .card::after{
+      content:""; position:absolute; inset:auto 0 0 0; height:46px;
+      background:linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,.08)); /* 하단도 살짝 밝게 */
+      pointer-events:none;
+    }
+    .card:hover{
+      transform:translateY(-5px);
+      box-shadow:0 12px 26px rgba(0,0,0,.45), 0 0 18px rgba(var(--glow),.16);
+      border-color:rgba(var(--glow),.22);
+    }
+
+    .card h2{
+      margin:0 0 16px; font-size:20px; font-weight:800;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .h2-left{ display:flex; align-items:center; gap:10px; }
+    .h2-right{ display:flex; align-items:center; gap:8px; }
+    .icon-btn{
+      border:1px solid var(--stroke); background:rgba(255,255,255,.04); color:#e8e8e8;
+      border-radius:10px; padding:8px 12px; cursor:pointer; font-size:14px; font-weight:700;
+      transition:.22s;
+    }
+    .icon-btn:hover{
+      border-color:rgba(var(--glow),.30); box-shadow:0 0 12px rgba(var(--glow),.18); transform:translateY(-1px);
+    }
+    .dropdown{ position:relative; }
+    .menu{
+      position:absolute; top:110%; right:0; display:none; min-width:200px;
+      background:rgba(26,26,26,.96); border:1px solid var(--stroke); border-radius:12px; padding:6px;
+      box-shadow:0 10px 24px rgba(0,0,0,.35);
+    }
+    .menu.open{ display:block; }
+    .menu button{
+      width:100%; text-align:left; background:transparent; border:none; color:#e8e8e8;
+      padding:10px 12px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600;
+    }
+    .menu button:hover{ background:rgba(255,255,255,.06); }
+    .menu .danger{ color:#ffb3b3; }
+
+    /* Profile info */
+    .profile-wrap{ display:flex; gap:20px; align-items:center; margin:6px 0 18px; }
+    .avatar{
+      width:84px; height:84px; border-radius:50%; flex:none;
+      background:#0f0f0f; border:1px solid var(--stroke);
+      display:flex; align-items:center; justify-content:center;
+      font-size:30px; font-weight:800; color:#bcd9ff;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    .profile{ display:grid; gap:12px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .field .label{ opacity:.7; font-size:13px; }
+    .field .value{ font-size:17px; margin-top:2px; }
+    @media (max-width:640px){ .profile{ grid-template-columns:1fr; } }
+
+    /* Quick */
+    .quick{ display:flex; flex-wrap:wrap; gap:10px; margin:10px 0 2px; }
+    .qbtn{
+      display:inline-flex; align-items:center; gap:10px;
+      padding:10px 12px; border-radius:12px; border:1px solid var(--stroke);
+      background:rgba(255,255,255,.04); color:#e8e8e8; text-decoration:none; font-weight:700;
+      transition:.22s;
+    }
+    .qbtn:hover{ border-color:rgba(var(--glow),.30); box-shadow:0 0 12px rgba(var(--glow),.16); transform:translateY(-1px); }
+    .qbtn img{ width:18px; height:18px; display:block; }
+
+    /* Wallet */
+    .wallet{ margin-top:8px; padding-top:16px; border-top:1px dashed #616161; display:grid; gap:14px; }
+    .cash{
+      display:flex; align-items:center; justify-content:space-between;
+      background:rgba(255,255,255,.05); /* 살짝만 밝게 조정해도 느낌 통일 */
+      border:1px solid var(--stroke); border-radius:12px; padding:12px 14px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    .holdings{
+      background:rgba(255,255,255,.04);
+      border:1px solid var(--stroke); border-radius:12px; overflow:hidden;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    table{ width:100%; border-collapse:collapse; font-size:15px; table-layout:fixed; }
+    th,td{ padding:12px 14px; border-bottom:1px solid #262626; text-align:left; }
+    th{ background:rgba(255,255,255,.04); font-weight:700; }
+    tr:last-child td{ border-bottom:none; }
+    th:first-child, td:first-child{ width:40%; border-right:1px solid var(--stroke); }
+
+    /* Bottom links */
+    .actions-row{
+      width:100%; display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:-4px;
+    }
+    .pill-link{
+      background:rgba(255,255,255,.04);
+      border:1px solid var(--stroke); color:#f2f2f2;
+      border-radius:11px; height:40px; padding:0 14px; text-decoration:none; font-weight:800;
+      display:inline-flex; align-items:center; gap:10px; transition:.24s;
+    }
+    .pill-link:hover{ border-color:rgba(var(--glow),.30); box-shadow:0 0 12px rgba(var(--glow),.20), 0 10px 20px rgba(0,0,0,.35); color:#fff; transform:translateY(-1px); }
+
+    /* Modals (탈퇴만 유지) */
+    .modal-overlay{
+      position:fixed; inset:0; background:rgba(0,0,0,.7);
+      display:none; justify-content:center; align-items:center; z-index:1000;
+    }
+    .modal-content{
+      background:rgba(44,44,44,.98); padding:24px; border-radius:12px; width:90%; max-width:480px;
+      border:1px solid var(--stroke); box-shadow:0 10px 24px rgba(0,0,0,.45);
+    }
+    .modal-content h2{ margin-top:0; }
+    .modal-content textarea{
+      width:100%; padding:10px; border-radius:8px; border:1px solid #555; background:#1a1a1a; color:#e8e8e8; margin-top:10px;
+    }
+    .modal-actions{ margin-top:20px; display:flex; justify-content:flex-end; gap:10px; }
+    .btn-secondary{ background:#555; color:#fff; border:none; padding:10px 16px; border-radius:8px; font-weight:700; cursor:pointer; }
+    .btn-secondary:hover{ background:#777; }
+    .danger-btn{ background:#c82333; color:#fff; border:none; padding:10px 16px; border-radius:8px; font-weight:700; cursor:pointer; }
+    .danger-btn:hover{ background:#a51c2b; }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <a class="brand" href="index.html"><img src="/images/logo.png" alt="ITC 로고" /></a>
+    <a class="navbtn" href="/logout" aria-label="로그아웃">⏻ 로그아웃</a>
+  </header>
+
+  <main>
+    <div class="pagetitle"><h1>마이페이지</h1></div>
+
+    <!-- Profile Card (밝게 조정됨) -->
+    <section class="card" aria-label="프로필 및 지갑">
+      <h2>
+        <span class="h2-left">Profile</span>
+        <span class="h2-right">
+          <span class="dropdown">
+            <button class="icon-btn" id="profileMenuBtn" aria-haspopup="true" aria-expanded="false" title="설정">⚙️ 설정</button>
+            <div class="menu" id="profileMenu" role="menu" aria-label="프로필 메뉴">
+              <!-- 이름 수정 항목 제거 -->
+              <button id="openDeletionFromMenuBtn" class="danger" role="menuitem">회원 탈퇴</button>
+            </div>
+          </span>
+        </span>
+      </h2>
+
+      <!-- Avatar + Basic info -->
+      <div class="profile-wrap">
+        <div class="avatar" id="avatarInitial">U</div>
+        <div class="profile">
+          <div class="field">
+            <div class="label">이름</div>
+            <div class="value" id="userName">-</div>
+          </div>
+          <div class="field">
+            <div class="label">가입일자</div>
+            <div class="value" id="signupDate">-</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick links -->
+      <div class="quick" aria-label="빠른 이동">
+        <a class="qbtn" href="historical.html">📖 튜토리얼</a>
+        <a class="qbtn" href="realtime.html">📈 모의 투자</a>
+        <a class="qbtn" href="crypto.html">📜 암호화폐 기초</a>
+        <a class="qbtn" href="news.html">📰 뉴스</a>
+      </div>
+
+      <!-- Wallet -->
+      <div class="wallet">
+        <div class="cash"><div>월렛 (현금)</div><div id="cashKRW">0원</div></div>
+        <div class="holdings">
+          <table>
+            <thead><tr><th>자산</th><th>보유수량</th></tr></thead>
+            <tbody>
+              <tr><td>비트코인 (BTC)</td><td id="btcQty">0</td></tr>
+              <tr><td>이더리움 (ETH)</td><td id="ethQty">0</td></tr>
+              <tr><td>리플 (XRP)</td><td id="xrpQty">0</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bottom actions -->
+    <div class="actions-row" aria-label="페이지 이동">
+      <a class="pill-link" href="report.html">📑 보고서 보러가기</a>
+      <a class="pill-link" href="qna.html">❓ Q&amp;A</a>
+    </div>
+  </main>
+
+  <!-- 탈퇴 모달만 유지 -->
+  <div id="deletion-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="deletion-title">
+    <div class="modal-content">
+      <h2 id="deletion-title">회원 탈퇴</h2>
+      <p>탈퇴 사유를 입력해주세요. 탈퇴 신청 후 확인 이메일이 발송되며, 이메일 인증 시 14일 후에 계정이 영구적으로 삭제됩니다.</p>
+      <form id="deletion-form">
+        <textarea id="deletion-reason" placeholder="(선택) 탈퇴 사유" rows="4"></textarea>
+        <div class="modal-actions">
+          <button type="button" id="cancel-deletion-btn" class="btn-secondary">취소</button>
+          <button type="submit" class="danger-btn">탈퇴 신청</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const $ = (sel) => document.querySelector(sel);
+
+    /* dropdown */
+    const profileMenuBtn = $('#profileMenuBtn');
+    const profileMenu    = $('#profileMenu');
+    function openMenu(){ profileMenu.classList.add('open'); profileMenuBtn.setAttribute('aria-expanded','true'); }
+    function closeMenu(){ profileMenu.classList.remove('open'); profileMenuBtn.setAttribute('aria-expanded','false'); }
+    profileMenuBtn.addEventListener('click', (e)=>{ e.stopPropagation(); profileMenu.classList.contains('open') ? closeMenu() : openMenu(); });
+    document.addEventListener('click', (e)=>{ if (!profileMenu.contains(e.target) && e.target !== profileMenuBtn) closeMenu(); });
+    document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape') closeMenu(); });
+
+    /* 탈퇴 모달 */
+    const deletionModal  = $('#deletion-modal');
+    const openDeletionBtn= $('#openDeletionFromMenuBtn');
+    const cancelDeletionBtn = $('#cancel-deletion-btn');
+    const deletionForm   = $('#deletion-form');
+    function openDeletion(){ deletionModal.style.display='flex'; }
+    function closeDeletion(){ deletionModal.style.display='none'; }
+    openDeletionBtn.addEventListener('click', ()=>{ closeMenu(); openDeletion(); });
+    cancelDeletionBtn.addEventListener('click', closeDeletion);
+    window.addEventListener('click', (e)=>{ if (e.target === deletionModal) closeDeletion(); });
+
+    deletionForm.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const reason = $('#deletion-reason').value;
+      try{
+        const response = await fetch('/api/user/request-deletion', {
+          method:'POST', headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ reason })
+        });
+        const result = await response.json();
+        if (response.ok){
+          closeDeletion();
+          if (result.scheduled){
+            alert('회원 탈퇴가 예약되었습니다. 14일 이내 재로그인 시 탈퇴가 취소됩니다.');
+            window.location.href = '/logout';
+          }else{
+            alert('회원 탈퇴 요청이 접수되었습니다. 이메일을 확인해 완료해주세요.');
+          }
+        }else{
+          alert(`오류: ${result.message || '알 수 없는 오류가 발생했습니다.'}`);
+        }
+      }catch(err){
+        console.error('Deletion request failed:', err);
+        alert('탈퇴 요청 중 오류가 발생했습니다.');
+      }
+    });
+
+    (async ()=>{
+      try{
+        const res = await fetch('/api/user');
+        if (!res.ok){
+          if (res.status === 401) { location.href = '/'; }
+          else { throw new Error('HTTP ' + res.status); }
+          return;
+        }
+        const user = await res.json();
+        $('#userName').textContent = user.username || '사용자';
+        $('#avatarInitial').textContent = (user.username || 'U').trim().charAt(0).toUpperCase();
+        const joined = user.created_at ? new Date(user.created_at) : new Date();
+        $('#signupDate').textContent = joined.toLocaleDateString('ko-KR');
+
+        const fmtKRW = n => Number(n).toLocaleString('ko-KR') + '원';
+        const fmtQty = (n, d=4) => Number(n).toLocaleString('ko-KR', { maximumFractionDigits:d });
+        $('#cashKRW').textContent = fmtKRW(user.krw_balance || 0);
+        $('#btcQty').textContent  = fmtQty(user.btc_balance || 0, 6);
+        $('#ethQty').textContent  = fmtQty(user.eth_balance || 0, 6);
+        $('#xrpQty').textContent  = fmtQty(user.xrp_balance || 0, 2);
+      }catch(err){
+        console.error('Failed to fetch user data:', err);
+      }
+    })();
+  </script>
+</body>
+</html>
